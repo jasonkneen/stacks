@@ -12,6 +12,8 @@ interface CanvasProps {
   onUpdateItems: (items: SpatialItem[]) => void;
   onNavigate: (spaceId: string) => void;
   onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
+  onOpenNote: (item: SpatialItem, rect: DOMRect) => void;
+  onEditFolderName: (item: SpatialItem) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onStackItems: (sourceId: string, targetId: string) => void;
   onConnect: (fromId: string, toId: string) => void;
@@ -29,6 +31,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onUpdateItems,
   onNavigate,
   onOpenMedia,
+  onOpenNote,
+  onEditFolderName,
   getSpaceItems,
   onStackItems,
   onConnect,
@@ -570,10 +574,12 @@ export const Canvas: React.FC<CanvasProps> = ({
             onResizeStart={handleResizeStart}
             onNavigate={onNavigate}
             onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
+            onOpenNote={(item, rect) => onOpenNote(item, rect)}
             onUpdateContent={(content) => {
                 const updated = items.map(i => i.id === item.id ? { ...i, content } : i);
                 onUpdateItems(updated);
             }}
+            onEditFolderName={onEditFolderName}
             getSpaceItems={getSpaceItems}
             onHover={setHoveredItemId}
             onConnectStart={handleConnectStart}

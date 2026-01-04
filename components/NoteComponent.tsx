@@ -1,15 +1,35 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { SpatialItem } from '../types';
-import { Bold, Italic, Heading1, Heading2, List } from 'lucide-react';
+import { Bold, Italic, Heading1, Heading2, List, Expand } from 'lucide-react';
 
 interface Props {
   item: SpatialItem;
   onChange: (val: string) => void;
+  onOpenNote?: (rect: DOMRect) => void;
 }
 
-export const NoteComponent: React.FC<Props> = ({ item, onChange }) => {
+export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) => {
   const [isEditing, setIsEditing] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Extract title from content (first h1, h2, or first text)
+  const getTitle = () => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(item.content, 'text/html');
+    const h1 = doc.querySelector('h1');
+    if (h1) return h1.textContent || 'Untitled';
+    const h2 = doc.querySelector('h2');
+    if (h2) return h2.textContent || 'Untitled';
+    const text = doc.body.textContent || '';
+    return text.slice(0, 30) + (text.length > 30 ? '...' : '') || 'Untitled';
+  };
+
+  const handleOpenViewer = () => {
+    if (containerRef.current && onOpenNote) {
+      onOpenNote(containerRef.current.getBoundingClientRect());
+    }
+  };
   
   // Sync content from props when not editing
   useEffect(() => {
@@ -32,12 +52,35 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange }) => {
   };
 
   return (
-    <div 
+    <div
+      ref={containerRef}
       className="w-full h-full bg-white flex flex-col relative group"
-      onDoubleClick={() => setIsEditing(true)}
     >
+      {/* Title Bar - Double click to expand */}
+      <div
+        className="absolute top-0 left-0 w-full h-10 flex items-center justify-between px-4 bg-gradient-to-b from-gray-50/80 to-transparent z-10 cursor-pointer group/title"
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          handleOpenViewer();
+        }}
+      >
+        <span className="text-xs font-medium text-gray-400 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+          {getTitle()}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenViewer();
+          }}
+          className="p-1 rounded hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Expand note"
+        >
+          <Expand size={14} className="text-gray-400" />
+        </button>
+      </div>
+
        {/* Toolbar - Only visible when editing */}
-      <div 
+      <div
         className={`absolute top-0 left-0 w-full h-12 bg-white/95 backdrop-blur border-b border-gray-100 flex items-center px-4 gap-1 transition-all duration-200 z-20 ${
           isEditing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
         }`}
@@ -63,11 +106,11 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange }) => {
       </div>
 
       {/* Editor Content */}
-      <div 
+      <div
         className="w-full h-full overflow-y-auto"
         // Stop propagation ONLY when editing to allow dragging when not editing.
-        // We allow double-click to bubble up if we wanted, but we handled it on the wrapper.
-        onMouseDown={(e) => isEditing && e.stopPropagation()} 
+        onMouseDown={(e) => isEditing && e.stopPropagation()}
+        onDoubleClick={() => setIsEditing(true)}
       >
         <div
             ref={contentRef}

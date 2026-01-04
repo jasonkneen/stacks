@@ -7,9 +7,10 @@ interface Props {
   sourceRect: DOMRect | null;
   onClose: () => void;
   onCreateVariant: (originalItem: SpatialItem, variantUrl: string, prompt: string) => void;
+  onAnalyze?: (itemId: string, imageUrl: string) => void;
 }
 
-export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCreateVariant }) => {
+export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCreateVariant, onAnalyze }) => {
   const [loaded, setLoaded] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -17,6 +18,18 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
   const [isClosing, setIsClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
+
+  // Get analysis data from metadata
+  const description = item.metadata?.description as string | undefined;
+  const colors = (item.metadata?.colors as string[]) || [];
+  const isAnalyzing = item.metadata?.isAnalyzing as boolean | undefined;
+
+  // Trigger analysis if no data and it's an image
+  useEffect(() => {
+    if (item.type === 'image' && !description && !isAnalyzing && colors.length === 0 && onAnalyze) {
+      onAnalyze(item.id, item.content);
+    }
+  }, [item.id, item.type, item.content, description, isAnalyzing, colors.length, onAnalyze]);
 
   // Calculate target position (centered)
   const getTargetRect = () => {
@@ -165,7 +178,29 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
             onCanPlay={() => setLoaded(true)}
           />
         )}
-      </div>
+
+        </div>
+
+      {/* Color Palette - Outside Left of Image */}
+      {colors.length > 0 && !showAtSource && (
+        <div
+          className="fixed flex flex-col gap-2 z-[115] transition-all duration-300"
+          style={{
+            left: target.x - 60,
+            top: target.y + (target.h / 2) - (colors.length * 22),
+          }}
+        >
+          {colors.map((color, index) => (
+            <div
+              key={index}
+              className="w-10 h-10 rounded-xl shadow-lg border-2 border-white/30 transition-all hover:scale-110 hover:border-white/60 cursor-pointer"
+              style={{ backgroundColor: color }}
+              title={`${color} - Click to copy`}
+              onClick={() => navigator.clipboard.writeText(color)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* AI Chat Input */}
       <div
@@ -173,6 +208,20 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
           isAnimating || isClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
         }`}
       >
+        {/* Description */}
+        {item.type === 'image' && (
+          <div className="mb-4 text-center">
+            {isAnalyzing ? (
+              <div className="flex items-center justify-center gap-2 text-white/50 text-sm">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Analyzing image...</span>
+              </div>
+            ) : description ? (
+              <p className="text-white/70 text-sm italic">{description}</p>
+            ) : null}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="relative">
           <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center gap-3 px-5 py-3 shadow-2xl">
             <Sparkles size={18} className="text-white/50 flex-shrink-0" />

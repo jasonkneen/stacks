@@ -1,12 +1,15 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { ContextToolbar } from './components/ContextToolbar';
 import { MediaViewer } from './components/MediaViewer';
+import { NoteViewer } from './components/NoteViewer';
 import { AIModal } from './components/AIModal';
+import { NameEditor } from './components/NameEditor';
 import { Space, SpatialItem, Connection } from './types';
 import { ArrowLeft, Menu } from 'lucide-react';
 import ELK from 'elkjs';
+import { analyzeImage } from './utils/imageAnalysis';
 
 // Initial Demo Data
 const ROOT_SPACE_ID = 'root';
@@ -154,10 +157,13 @@ const App: React.FC = () => {
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
   const [mediaViewerItem, setMediaViewerItem] = useState<SpatialItem | null>(null);
   const [mediaViewerRect, setMediaViewerRect] = useState<DOMRect | null>(null);
+  const [noteViewerItem, setNoteViewerItem] = useState<SpatialItem | null>(null);
+  const [noteViewerRect, setNoteViewerRect] = useState<DOMRect | null>(null);
   const [isLayouting, setIsLayouting] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [showAIModal, setShowAIModal] = useState(false);
-  
+  const [editingFolderItem, setEditingFolderItem] = useState<SpatialItem | null>(null);
+
   // To trigger camera moves programmatically in Canvas
   const [cameraOverride, setCameraOverride] = useState<{ x: number, y: number, zoom: number, id: string } | undefined>(undefined);
 
@@ -170,6 +176,48 @@ const App: React.FC = () => {
       [activeSpaceId]: {
         ...prev[activeSpaceId],
         items: newItems,
+      }
+    }));
+  }, [activeSpaceId]);
+
+  // Helper to analyze an image and update its metadata
+  const analyzeAndUpdateImage = useCallback(async (itemId: string, imageUrl: string, spaceId?: string) => {
+    const targetSpaceId = spaceId || activeSpaceId;
+
+    // Mark as analyzing
+    setSpaces(prev => ({
+      ...prev,
+      [targetSpaceId]: {
+        ...prev[targetSpaceId],
+        items: prev[targetSpaceId].items.map(item =>
+          item.id === itemId
+            ? { ...item, metadata: { ...item.metadata, isAnalyzing: true } }
+            : item
+        )
+      }
+    }));
+
+    // Run analysis
+    const analysis = await analyzeImage(imageUrl);
+
+    // Update with results
+    setSpaces(prev => ({
+      ...prev,
+      [targetSpaceId]: {
+        ...prev[targetSpaceId],
+        items: prev[targetSpaceId].items.map(item =>
+          item.id === itemId
+            ? {
+                ...item,
+                metadata: {
+                  ...item.metadata,
+                  description: analysis.description,
+                  colors: analysis.colors,
+                  isAnalyzing: false
+                }
+              }
+            : item
+        )
       }
     }));
   }, [activeSpaceId]);
@@ -422,12 +470,24 @@ const App: React.FC = () => {
         }
       }));
       triggerAutoFit();
+
+      // Analyze images in the stack
+      stackItems.forEach(item => {
+        if (item.type === 'image') {
+          analyzeAndUpdateImage(item.id, item.content, newSpaceId);
+        }
+      });
     } else if (newItems.length === 1) {
       // Single file, just add it
       updateItems([...spaces[activeSpaceId].items, newItems[0]]);
       triggerAutoFit();
+
+      // Analyze if it's an image
+      if (newItems[0].type === 'image') {
+        analyzeAndUpdateImage(newItems[0].id, newItems[0].content);
+      }
     }
-  }, [activeSpaceId, spaces, updateItems, triggerAutoFit]);
+  }, [activeSpaceId, spaces, updateItems, triggerAutoFit, analyzeAndUpdateImage]);
 
   const handleConnect = useCallback((fromId: string, toId: string) => {
       setSpaces(prev => {
@@ -463,6 +523,35 @@ const App: React.FC = () => {
           };
       });
   }, [activeSpaceId]);
+
+  // Handle folder name save
+  const handleSaveFolderName = useCallback((newName: string) => {
+    if (!editingFolderItem) return;
+
+    setSpaces(prev => {
+      const space = prev[activeSpaceId];
+      const updatedItems = space.items.map(item =>
+        item.id === editingFolderItem.id ? { ...item, content: newName } : item
+      );
+
+      // Also update linked space name if exists
+      const linkedSpaceId = editingFolderItem.linkedSpaceId;
+      if (linkedSpaceId && prev[linkedSpaceId]) {
+        return {
+          ...prev,
+          [activeSpaceId]: { ...space, items: updatedItems },
+          [linkedSpaceId]: { ...prev[linkedSpaceId], name: newName }
+        };
+      }
+
+      return {
+        ...prev,
+        [activeSpaceId]: { ...space, items: updatedItems }
+      };
+    });
+
+    setEditingFolderItem(null);
+  }, [activeSpaceId, editingFolderItem]);
 
   // Handle variant creation from MediaViewer
   const handleCreateVariant = useCallback((originalItem: SpatialItem, variantUrl: string, prompt: string) => {
@@ -723,6 +812,9 @@ const App: React.FC = () => {
           setShowAIModal(false);
         } else if (mediaViewerItem) {
           setMediaViewerItem(null);
+        } else if (noteViewerItem) {
+          setNoteViewerItem(null);
+          setNoteViewerRect(null);
         } else if (selection.size > 0) {
             setSelection(new Set());
         } else if (activeSpace.parentId) {
@@ -738,7 +830,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSpace, mediaViewerItem, selection, handleDeleteItems, showAIModal]);
+  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal]);
 
   return (
     <div className="relative w-full h-full bg-gray-50 overflow-hidden text-gray-900">
@@ -763,7 +855,7 @@ const App: React.FC = () => {
         key={activeSpaceId} 
         className="w-full h-full animate-space-enter"
       >
-        <Canvas 
+        <Canvas
             items={activeSpace.items}
             connections={activeSpace.connections || []}
             initialCamera={activeSpace.camera}
@@ -776,6 +868,11 @@ const App: React.FC = () => {
               setMediaViewerRect(rect);
               setMediaViewerItem(item);
             }}
+            onOpenNote={(item, rect) => {
+              setNoteViewerRect(rect);
+              setNoteViewerItem(item);
+            }}
+            onEditFolderName={setEditingFolderItem}
             getSpaceItems={getSpaceItems}
             onStackItems={handleStackItems}
             onConnect={handleConnect}
@@ -857,15 +954,50 @@ const App: React.FC = () => {
       )}
 
       {/* Media Viewer Modal */}
-      {mediaViewerItem && (
-        <MediaViewer
-          item={mediaViewerItem}
-          sourceRect={mediaViewerRect}
+      {mediaViewerItem && (() => {
+        // Get the current item from the space (might have updated metadata)
+        const currentItem = activeSpace.items.find(i => i.id === mediaViewerItem.id) || mediaViewerItem;
+        return (
+          <MediaViewer
+            item={currentItem}
+            sourceRect={mediaViewerRect}
+            onClose={() => {
+              setMediaViewerItem(null);
+              setMediaViewerRect(null);
+            }}
+            onCreateVariant={handleCreateVariant}
+            onAnalyze={analyzeAndUpdateImage}
+          />
+        );
+      })()}
+
+      {/* Note Viewer Modal */}
+      {noteViewerItem && (
+        <NoteViewer
+          item={noteViewerItem}
+          sourceRect={noteViewerRect}
           onClose={() => {
-            setMediaViewerItem(null);
-            setMediaViewerRect(null);
+            setNoteViewerItem(null);
+            setNoteViewerRect(null);
           }}
-          onCreateVariant={handleCreateVariant}
+          onUpdateContent={(content) => {
+            // Update the note content in the space
+            const updatedItems = activeSpace.items.map(item =>
+              item.id === noteViewerItem.id ? { ...item, content } : item
+            );
+            updateItems(updatedItems);
+            // Update local reference too
+            setNoteViewerItem(prev => prev ? { ...prev, content } : null);
+          }}
+        />
+      )}
+
+      {/* Folder Name Editor */}
+      {editingFolderItem && (
+        <NameEditor
+          initialName={editingFolderItem.content}
+          onSave={handleSaveFolderName}
+          onCancel={() => setEditingFolderItem(null)}
         />
       )}
     </div>

@@ -5,10 +5,11 @@ import { Folder as FolderIcon } from 'lucide-react';
 interface Props {
   item: SpatialItem;
   onDoubleClick: () => void;
+  onEditName: () => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
 }
 
-export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, getSpaceItems }) => {
+export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditName, getSpaceItems }) => {
   const linkedItems = useMemo(() => {
     if (!item.linkedSpaceId) return [];
     const items = getSpaceItems(item.linkedSpaceId);
@@ -26,7 +27,7 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, getSpace
   const isEmpty = linkedItems.length === 0;
 
   return (
-    <div 
+    <div
         className="w-full h-full relative group cursor-pointer"
         onDoubleClick={onDoubleClick}
     >
@@ -88,8 +89,14 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, getSpace
                 )}
 
                 {/* Label Badge - Floating below */}
-                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-40">
-                    <div className="bg-gray-900/80 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-xl">
+                <div
+                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-40 cursor-pointer"
+                    onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        onEditName();
+                    }}
+                >
+                    <div className="bg-gray-900/80 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-xl hover:bg-gray-800/90 transition-colors">
                         <span className="text-xs font-bold text-white whitespace-nowrap">
                             {item.content}
                             <span className="opacity-50 font-normal ml-2">{linkedItems.length} items</span>

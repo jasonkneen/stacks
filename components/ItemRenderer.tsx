@@ -15,7 +15,9 @@ interface ItemRendererProps {
   onResizeStart: (e: React.MouseEvent, id: string) => void;
   onNavigate: (spaceId: string) => void;
   onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
+  onOpenNote: (item: SpatialItem, rect: DOMRect) => void;
   onUpdateContent: (content: string) => void;
+  onEditFolderName: (item: SpatialItem) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onHover: (id: string | null) => void;
   onConnectStart: (e: React.MouseEvent, id: string) => void;
@@ -31,7 +33,9 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onResizeStart,
   onNavigate,
   onOpenMedia,
+  onOpenNote,
   onUpdateContent,
+  onEditFolderName,
   getSpaceItems,
   onHover,
   onConnectStart
@@ -64,12 +68,19 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       case 'sticky':
         return <StickyComponent item={item} onChange={onUpdateContent} />;
       case 'note':
-        return <NoteComponent item={item} onChange={onUpdateContent} />;
+        return <NoteComponent item={item} onChange={onUpdateContent} onOpenNote={(rect) => onOpenNote(item, rect)} />;
       case 'image':
       case 'video':
         return <MediaComponent item={item} onDoubleClick={(rect) => onOpenMedia(item, rect)} />;
       case 'folder':
-        return <FolderComponent item={item} onDoubleClick={() => item.linkedSpaceId && onNavigate(item.linkedSpaceId)} getSpaceItems={getSpaceItems} />;
+        return (
+          <FolderComponent
+            item={item}
+            onDoubleClick={() => item.linkedSpaceId && onNavigate(item.linkedSpaceId)}
+            onEditName={() => onEditFolderName(item)}
+            getSpaceItems={getSpaceItems}
+          />
+        );
       default:
         return null;
     }
