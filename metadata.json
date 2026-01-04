@@ -1,0 +1,7 @@
+{
+  "name": "Spatial (Alpha)",
+  "description": "A local-first, macOS-native spatial organization tool designed as an open air space for thinking, collecting, and remembering.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
