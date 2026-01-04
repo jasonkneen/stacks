@@ -1,13 +1,14 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Canvas } from './components/Canvas';
-import { Toolbar } from './components/Toolbar';
 import { ContextToolbar } from './components/ContextToolbar';
 import { MediaViewer } from './components/MediaViewer';
 import { NoteViewer } from './components/NoteViewer';
 import { AIModal } from './components/AIModal';
 import { NameEditor } from './components/NameEditor';
+import { SpaceOverview } from './components/SpaceOverview';
+import { SettingsModal } from './components/SettingsModal';
 import { Space, SpatialItem, Connection } from './types';
-import { ArrowLeft, Menu } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 
@@ -16,7 +17,7 @@ const ROOT_SPACE_ID = 'root';
 const INITIAL_SPACES: Record<string, Space> = {
   [ROOT_SPACE_ID]: {
     id: ROOT_SPACE_ID,
-    name: 'Home',
+    name: 'Scratchpad',
     parentId: null,
     camera: { x: 0, y: 0, zoom: 1 },
     items: [
@@ -29,7 +30,7 @@ const INITIAL_SPACES: Record<string, Space> = {
         h: 400,
         zIndex: 1,
         rotation: -1.2,
-        content: `<h1>Welcome to Spatial Alpha</h1><p>This is an "open air space" for thinking.</p><ul><li>Drag items to move them.</li><li>Double-click a folder to enter.</li><li>Double-click media to view.</li><li>Double-click a note to edit.</li><li>Scroll to pan, Ctrl+Scroll to zoom.</li></ul>`,
+        content: `<h1>Welcome to Scratchpad</h1><p>An open space for thinking and organizing.</p><ul><li>Drag items to move them</li><li>Double-click folders to enter</li><li>Double-click media to view</li><li>Double-click notes to edit</li><li>Hold Space + drag to pan</li></ul>`,
       },
       {
         id: '2',
@@ -163,11 +164,19 @@ const App: React.FC = () => {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [showAIModal, setShowAIModal] = useState(false);
   const [editingFolderItem, setEditingFolderItem] = useState<SpatialItem | null>(null);
+  const [showOverview, setShowOverview] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // To trigger camera moves programmatically in Canvas
   const [cameraOverride, setCameraOverride] = useState<{ x: number, y: number, zoom: number, id: string } | undefined>(undefined);
 
   const activeSpace = spaces[activeSpaceId];
+
+  // Get top-level spaces (no parent) for horizontal navigation
+  const topLevelSpaces = useMemo(() => {
+    return Object.values(spaces).filter(s => s.parentId === null);
+  }, [spaces]);
 
   // Helper to update items in the current space
   const updateItems = useCallback((newItems: SpatialItem[]) => {
@@ -724,15 +733,24 @@ const App: React.FC = () => {
     setIsLayouting(true);
 
     try {
+      // Filter items: only layout non-manually-positioned items
+      const itemsToLayout = activeSpace.items.filter(item => !item.metadata?.manuallyPositioned);
+      const manualItems = activeSpace.items.filter(item => item.metadata?.manuallyPositioned);
+
+      if (itemsToLayout.length === 0) {
+        setIsLayouting(false);
+        return; // Nothing to layout
+      }
+
       // Construct ELK graph
       const graph = {
         id: 'root',
         layoutOptions: {
           'elk.algorithm': 'rectpacking',
-          'elk.spacing.nodeNode': '40', // Spacing between items
-          'elk.aspectRatio': '1.6', // Target aspect ratio for the packing
+          'elk.spacing.nodeNode': '40',
+          'elk.aspectRatio': '1.6',
         },
-        children: activeSpace.items.map(item => ({
+        children: itemsToLayout.map(item => ({
           id: item.id,
           width: item.w,
           height: item.h,
@@ -742,7 +760,8 @@ const App: React.FC = () => {
       const layoutedGraph = await elk.layout(graph);
 
       if (layoutedGraph.children) {
-        const newItems = activeSpace.items.map(item => {
+        // Update only the auto-layouted items
+        const layoutedItems = itemsToLayout.map(item => {
           const node = layoutedGraph.children?.find(n => n.id === item.id);
           if (node) {
             return {
@@ -753,10 +772,13 @@ const App: React.FC = () => {
           }
           return item;
         });
-        
+
+        // Combine manual + layouted items
+        const newItems = [...manualItems, ...layoutedItems];
+
         // 1. Update items
         updateItems(newItems);
-        
+
         // 2. Fit camera to new layout
         const fitParams = getFitToViewParams(newItems);
         setCameraOverride({ ...fitParams, id: Date.now().toString() });
@@ -826,109 +848,424 @@ const App: React.FC = () => {
           if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && !(document.activeElement as HTMLElement)?.isContentEditable) {
              handleDeleteItems(selection);
           }
+      } else if (e.key === 'ArrowLeft' && e.metaKey && topLevelSpaces.length > 1) {
+          // Navigate to previous space
+          const activeTag = document.activeElement?.tagName;
+          if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+            const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
+            if (currentIndex > 0) {
+              const prevSpace = topLevelSpaces[currentIndex - 1];
+              setActiveSpaceId(prevSpace.id);
+              setSelection(new Set());
+              if (prevSpace.items.length > 0) {
+                setTimeout(() => {
+                  const fitParams = getFitToViewParams(prevSpace.items);
+                  setCameraOverride({ ...fitParams, id: Date.now().toString() });
+                }, 0);
+              }
+            }
+          }
+      } else if (e.key === 'ArrowRight' && e.metaKey && topLevelSpaces.length > 1) {
+          // Navigate to next space
+          const activeTag = document.activeElement?.tagName;
+          if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+            const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
+            if (currentIndex < topLevelSpaces.length - 1) {
+              const nextSpace = topLevelSpaces[currentIndex + 1];
+              setActiveSpaceId(nextSpace.id);
+              setSelection(new Set());
+              if (nextSpace.items.length > 0) {
+                setTimeout(() => {
+                  const fitParams = getFitToViewParams(nextSpace.items);
+                  setCameraOverride({ ...fitParams, id: Date.now().toString() });
+                }, 0);
+              }
+            }
+          }
+      } else if (e.key === 'o' && e.metaKey && topLevelSpaces.length > 1) {
+          // Toggle overview mode with Cmd+O
+          const activeTag = document.activeElement?.tagName;
+          if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+            e.preventDefault();
+            setShowOverview(prev => !prev);
+          }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal]);
+  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId]);
 
   return (
     <div className="relative w-full h-full bg-gray-50 overflow-hidden text-gray-900">
       
-      {/* Persistent Navigation (Top Left) */}
-      <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
-        {activeSpace.parentId && (
-          <button 
-            onClick={handleBack}
-            className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100"
-          >
-            <ArrowLeft size={20} className="text-gray-700" />
-          </button>
-        )}
-        <div className="px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-100 font-semibold text-sm text-gray-700 select-none">
-          {activeSpace.name}
-        </div>
-      </div>
+      {/* Persistent Navigation (Top Left) - Hidden in overview */}
+      {!showOverview && (
+        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
+          {activeSpace.parentId && (
+            <button
+              onClick={handleBack}
+              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100"
+            >
+              <ArrowLeft size={20} className="text-gray-700" />
+            </button>
+          )}
+          <div className="px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-100 font-semibold text-sm text-gray-700 select-none">
+            {activeSpace.name}
+          </div>
 
-      {/* Main Canvas */}
-      <div 
-        key={activeSpaceId} 
-        className="w-full h-full animate-space-enter"
-      >
-        <Canvas
-            items={activeSpace.items}
-            connections={activeSpace.connections || []}
-            initialCamera={activeSpace.camera}
-            cameraOverride={cameraOverride}
-            selection={selection}
-            onSelectionChange={setSelection}
-            onUpdateItems={updateItems}
-            onNavigate={handleNavigate}
-            onOpenMedia={(item, rect) => {
-              setMediaViewerRect(rect);
-              setMediaViewerItem(item);
-            }}
-            onOpenNote={(item, rect) => {
-              setNoteViewerRect(rect);
-              setNoteViewerItem(item);
-            }}
-            onEditFolderName={setEditingFolderItem}
-            getSpaceItems={getSpaceItems}
-            onStackItems={handleStackItems}
-            onConnect={handleConnect}
-            onDeleteConnection={handleDeleteConnection}
-            onDropFiles={handleDropFiles}
+          {/* Toggle Overview Button */}
+          {topLevelSpaces.length > 1 && (
+            <button
+              onClick={() => setShowOverview(true)}
+              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100"
+              title="Show all spaces (⌘O)"
+            >
+              <Menu size={20} className="text-gray-700" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Main View - Canvas or Overview */}
+      {showOverview ? (
+        <SpaceOverview
+          spaces={topLevelSpaces}
+          activeSpaceId={activeSpaceId}
+          onSelectSpace={(spaceId) => {
+            setActiveSpaceId(spaceId);
+            setShowOverview(false);
+            setSelection(new Set());
+            const targetSpace = spaces[spaceId];
+            if (targetSpace && targetSpace.items.length > 0) {
+              setTimeout(() => {
+                const fitParams = getFitToViewParams(targetSpace.items);
+                setCameraOverride({ ...fitParams, id: Date.now().toString() });
+              }, 0);
+            }
+          }}
         />
-      </div>
+      ) : (
+        <div
+          key={activeSpaceId}
+          className="w-full h-full animate-space-enter"
+        >
+          <Canvas
+              items={activeSpace.items}
+              connections={activeSpace.connections || []}
+              initialCamera={activeSpace.camera}
+              cameraOverride={cameraOverride}
+              selection={selection}
+              onSelectionChange={setSelection}
+              onUpdateItems={updateItems}
+              onNavigate={handleNavigate}
+              onOpenMedia={(item, rect) => {
+                setMediaViewerRect(rect);
+                setMediaViewerItem(item);
+              }}
+              onOpenNote={(item, rect) => {
+                setNoteViewerRect(rect);
+                setNoteViewerItem(item);
+              }}
+              onEditFolderName={setEditingFolderItem}
+              getSpaceItems={getSpaceItems}
+              onStackItems={handleStackItems}
+              onConnect={handleConnect}
+              onDeleteConnection={handleDeleteConnection}
+              onDropFiles={handleDropFiles}
+              onMarkManuallyPositioned={(ids) => {
+                const updatedItems = activeSpace.items.map(item =>
+                  ids.includes(item.id)
+                    ? { ...item, metadata: { ...item.metadata, manuallyPositioned: true } }
+                    : item
+                );
+                updateItems(updatedItems);
+              }}
+          />
+        </div>
+      )}
 
       {/* Slide-up Context Toolbar */}
-      <ContextToolbar
+      {!showOverview && (
+        <ContextToolbar
           selection={selection}
           items={activeSpace.items}
           onUpdateItem={handleUpdateItem}
           onDelete={handleDeleteItems}
           onGroupToStack={handleGroupToStack}
           onUngroup={handleUngroup}
-      />
+        />
+      )}
 
-      {/* Creation Toolbar (Bottom Right) */}
-      <Toolbar 
-        onAddItem={(type) => {
-          const newItem: SpatialItem = {
-            id: Date.now().toString(),
-            type,
-            x: -window.innerWidth/2 * 0.1, // Roughly center
-            y: 0,
-            w: type === 'sticky' ? 200 : type === 'folder' ? 200 : 300,
-            h: type === 'sticky' ? 200 : type === 'folder' ? 240 : 200,
-            zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
-            rotation: (Math.random() - 0.5) * 6, // Random rotation between -3 and 3 degrees
-            content: type === 'sticky' ? 'New thought...' : type === 'folder' ? 'New Space' : type === 'image' ? 'https://picsum.photos/400/300' : '<p>New Note</p>',
-            color: type === 'sticky' ? 'bg-yellow-200' : undefined,
-            linkedSpaceId: type === 'folder' ? `space-${Date.now()}` : undefined
-          };
+      {/* Space Navigation + Actions - Bottom Right */}
+      {!showOverview && (
+        <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
+          {/* AI Studio Button */}
+          <button
+            className="bg-blue-600 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-blue-500 text-white transition-all shadow-xl hover:scale-105 active:scale-95"
+            onClick={() => setShowAIModal(true)}
+            title="AI Studio"
+          >
+            <Zap size={20} fill="currentColor" />
+          </button>
 
-          if (type === 'folder') {
-             // Create the new space for the folder
-             setSpaces(prev => ({
-                 ...prev,
-                 [newItem.linkedSpaceId!]: {
-                     id: newItem.linkedSpaceId!,
-                     name: 'New Space',
-                     parentId: activeSpaceId,
-                     items: [],
-                     connections: [],
-                     camera: { x: 0, y: 0, zoom: 1 }
-                 }
-             }));
-          }
+          {/* Organize Button */}
+          <button
+            className="bg-gray-900/95 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10"
+            onClick={handleAutoLayout}
+            title="Organize"
+          >
+            <LayoutGrid size={20} />
+          </button>
 
-          updateItems([...activeSpace.items, newItem]);
-        }}
-        onAutoLayout={handleAutoLayout}
-        isLayouting={isLayouting}
-        onOpenAI={() => setShowAIModal(true)}
-      />
+          {/* New Space Button */}
+          <button
+            className="bg-gray-900/95 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10"
+            onClick={() => {
+              const newSpaceId = `space-${Date.now()}`;
+              setSpaces(prev => ({
+                ...prev,
+                [newSpaceId]: {
+                  id: newSpaceId,
+                  name: 'New Space',
+                  parentId: null,
+                  items: [],
+                  connections: [],
+                  camera: { x: 0, y: 0, zoom: 1 }
+                }
+              }));
+              setActiveSpaceId(newSpaceId);
+              setSelection(new Set());
+            }}
+            title="New Space"
+          >
+            <FolderPlus size={20} />
+          </button>
+
+          {/* Space Indicator */}
+          {topLevelSpaces.length > 1 && (
+            <div className="bg-gray-900/95 backdrop-blur-xl rounded-full px-2 py-1.5 shadow-xl border border-white/10">
+              <div className="flex items-center gap-2">
+                {/* Previous button */}
+                <button
+                  onClick={() => {
+                    const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
+                    if (currentIndex > 0) {
+                      const prevSpace = topLevelSpaces[currentIndex - 1];
+                      setActiveSpaceId(prevSpace.id);
+                      setSelection(new Set());
+                      if (prevSpace.items.length > 0) {
+                        setTimeout(() => {
+                          const fitParams = getFitToViewParams(prevSpace.items);
+                          setCameraOverride({ ...fitParams, id: Date.now().toString() });
+                        }, 0);
+                      }
+                    }
+                  }}
+                  disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0}
+                  className={`p-2 rounded-full transition-all ${
+                    topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0
+                      ? 'opacity-0 cursor-not-allowed'
+                      : 'bg-gray-800/50 hover:bg-gray-700 text-white shadow-lg'
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+
+                {/* Space dots */}
+                <div className="flex items-center gap-1.5 px-2">
+                  {topLevelSpaces.map((space) => (
+                    <button
+                      key={space.id}
+                      onClick={() => {
+                        setActiveSpaceId(space.id);
+                        setSelection(new Set());
+                        if (space.items.length > 0) {
+                          setTimeout(() => {
+                            const fitParams = getFitToViewParams(space.items);
+                            setCameraOverride({ ...fitParams, id: Date.now().toString() });
+                          }, 0);
+                        }
+                      }}
+                      className={`transition-all duration-300 rounded-full ${
+                        space.id === activeSpaceId
+                          ? 'w-6 h-1.5 bg-white'
+                          : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60'
+                      }`}
+                      title={space.name}
+                    />
+                  ))}
+                </div>
+
+                {/* Next button */}
+                <button
+                  onClick={() => {
+                    const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
+                    if (currentIndex < topLevelSpaces.length - 1) {
+                      const nextSpace = topLevelSpaces[currentIndex + 1];
+                      setActiveSpaceId(nextSpace.id);
+                      setSelection(new Set());
+                      if (nextSpace.items.length > 0) {
+                        setTimeout(() => {
+                          const fitParams = getFitToViewParams(nextSpace.items);
+                          setCameraOverride({ ...fitParams, id: Date.now().toString() });
+                        }, 0);
+                      }
+                    }
+                  }}
+                  disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1}
+                  className={`p-2 rounded-full transition-all ${
+                    topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1
+                      ? 'opacity-0 cursor-not-allowed'
+                      : 'bg-gray-800/50 hover:bg-gray-700 text-white shadow-lg'
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Add Button with Menu */}
+          <div className="relative">
+            {/* Add Menu Dropdown */}
+            {showAddMenu && (
+              <div className="absolute bottom-16 right-0 bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <button
+                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const newItem: SpatialItem = {
+                      id: Date.now().toString(),
+                      type: 'sticky',
+                      x: -window.innerWidth/2 * 0.1,
+                      y: 0,
+                      w: 200,
+                      h: 200,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: (Math.random() - 0.5) * 6,
+                      content: 'New thought...',
+                      color: 'bg-yellow-200'
+                    };
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <StickyNote size={18} />
+                  <span className="text-sm">Sticky Note</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const newItem: SpatialItem = {
+                      id: Date.now().toString(),
+                      type: 'note',
+                      x: -window.innerWidth/2 * 0.1,
+                      y: 0,
+                      w: 300,
+                      h: 200,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: (Math.random() - 0.5) * 6,
+                      content: '<p>New Note</p>'
+                    };
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <Type size={18} />
+                  <span className="text-sm">Note</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const newItem: SpatialItem = {
+                      id: Date.now().toString(),
+                      type: 'image',
+                      x: -window.innerWidth/2 * 0.1,
+                      y: 0,
+                      w: 300,
+                      h: 200,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: (Math.random() - 0.5) * 6,
+                      content: 'https://picsum.photos/400/300'
+                    };
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <ImageIcon size={18} />
+                  <span className="text-sm">Image</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const newSpaceId = `space-${Date.now()}`;
+                    const newItem: SpatialItem = {
+                      id: Date.now().toString(),
+                      type: 'folder',
+                      x: -window.innerWidth/2 * 0.1,
+                      y: 0,
+                      w: 200,
+                      h: 240,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: (Math.random() - 0.5) * 6,
+                      content: 'New Space',
+                      linkedSpaceId: newSpaceId
+                    };
+                    setSpaces(prev => ({
+                      ...prev,
+                      [newSpaceId]: {
+                        id: newSpaceId,
+                        name: 'New Space',
+                        parentId: activeSpaceId,
+                        items: [],
+                        connections: [],
+                        camera: { x: 0, y: 0, zoom: 1 }
+                      }
+                    }));
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <FolderPlus size={18} />
+                  <span className="text-sm">Folder</span>
+                </button>
+              </div>
+            )}
+
+            <button
+              className={`bg-gray-900 text-white p-3.5 rounded-full hover:bg-black transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 ${showAddMenu ? 'rotate-45' : ''}`}
+              onClick={() => setShowAddMenu(!showAddMenu)}
+            >
+              {showAddMenu ? <X size={22} /> : <Plus size={22} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Click outside to close add menu */}
+      {showAddMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowAddMenu(false)}
+        />
+      )}
+
+      {/* Settings Button - Bottom Left */}
+      {!showOverview && (
+        <button
+          className="absolute bottom-8 left-8 p-3.5 bg-gray-900/95 backdrop-blur-xl rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10 z-50"
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+        >
+          <Settings size={20} />
+        </button>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* AI Modal */}
       {showAIModal && (

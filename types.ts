@@ -16,6 +16,11 @@ export interface SpatialItem {
     duration?: string;
     fps?: string;
     resolution?: string;
+    manuallyPositioned?: boolean;
+    description?: string;
+    colors?: string[];
+    isAnalyzing?: boolean;
+    title?: string;
   };
   linkedSpaceId?: string; // For folders
 }

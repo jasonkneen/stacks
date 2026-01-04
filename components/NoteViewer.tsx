@@ -106,6 +106,13 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
     }
   };
 
+  // Initialize content once
+  useEffect(() => {
+    if (contentRef.current && !contentRef.current.innerHTML) {
+      contentRef.current.innerHTML = item.content;
+    }
+  }, []);
+
   // Animate in
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -219,39 +226,9 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
 
   // Handle slash command
   const handleInput = (e: React.FormEvent) => {
-    const target = e.target as HTMLDivElement;
-    const selection = window.getSelection();
-
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const textNode = range.startContainer;
-
-      if (textNode.nodeType === Node.TEXT_NODE) {
-        const text = textNode.textContent || '';
-        const cursorPos = range.startOffset;
-
-        // Check if user just typed "/"
-        if (text[cursorPos - 1] === '/') {
-          const rect = range.getBoundingClientRect();
-          setBlockMenuPosition({
-            x: rect.left,
-            y: rect.bottom + 8
-          });
-          setShowBlockMenu(true);
-          setSelectedBlockIndex(0);
-
-          // Remove the "/" character
-          const newText = text.slice(0, cursorPos - 1) + text.slice(cursorPos);
-          textNode.textContent = newText;
-          range.setStart(textNode, cursorPos - 1);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        } else {
-          setShowBlockMenu(false);
-        }
-      }
-    }
+    // For now, disable slash command to fix typing issues
+    // Will implement properly later
+    setShowBlockMenu(false);
   };
 
   const handleClose = () => {
@@ -367,7 +344,6 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
           className="flex-1 overflow-y-auto p-12 pt-8 note-content"
           contentEditable
           suppressContentEditableWarning
-          dangerouslySetInnerHTML={{ __html: item.content }}
           onInput={handleInput}
           onBlur={() => {
             if (contentRef.current) {

@@ -1,62 +1,136 @@
-import React from 'react';
-import { Plus, StickyNote, Image as ImageIcon, FolderPlus, Type, LayoutGrid, Loader2, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, StickyNote, Image as ImageIcon, Type, Layers, LayoutGrid, Droplet, FolderPlus, Trash2, X } from 'lucide-react';
 import { ItemType } from '../types';
+import { SpaceIndicator } from './SpaceIndicator';
+import { Space } from '../types';
 
 interface Props {
   onAddItem: (type: ItemType) => void;
   onAutoLayout: () => void;
+  onNewSpace: () => void;
+  onDeleteSelected: () => void;
+  hasSelection: boolean;
   isLayouting: boolean;
-  onOpenAI: () => void;
+  spaces: Space[];
+  activeSpaceId: string;
+  onNavigateSpace: (spaceId: string) => void;
 }
 
-export const Toolbar: React.FC<Props> = ({ onAddItem, onAutoLayout, isLayouting, onOpenAI }) => {
-  const btnClass = "p-3 rounded-full hover:bg-gray-100 text-gray-700 transition-colors active:scale-95 duration-150 relative group";
-  const tooltipClass = "absolute bottom-full mb-3 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity shadow-lg";
+export const Toolbar: React.FC<Props> = ({
+  onAddItem,
+  onAutoLayout,
+  onNewSpace,
+  onDeleteSelected,
+  hasSelection,
+  isLayouting,
+  spaces,
+  activeSpaceId,
+  onNavigateSpace
+}) => {
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const btnClass = "p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-95 duration-150";
+  const addBtnClass = "p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2";
 
   return (
-    <div className="absolute bottom-8 right-8 flex items-center gap-2 bg-white/90 backdrop-blur-2xl p-2.5 rounded-full shadow-2xl border border-white/50 z-50 ring-1 ring-black/5">
-      
-      {/* AI Button */}
-      <button className="p-3 rounded-full hover:bg-blue-50 text-blue-600 transition-colors active:scale-95 duration-150 relative group" onClick={onOpenAI}>
-        <Zap size={20} fill="currentColor" className="opacity-100" />
-        <span className={tooltipClass}>AI Studio</span>
-      </button>
+    <>
+      {/* Main Dark Toolbar - Bottom Center */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-gray-900/95 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-white/10 z-50">
+        <button className={btnClass} title="Stack">
+          <Layers size={20} />
+        </button>
 
-      <div className="w-px h-6 bg-gray-200 mx-1" />
-      
-      {/* Layout Button */}
-      <button className={btnClass} onClick={onAutoLayout} disabled={isLayouting}>
-        {isLayouting ? <Loader2 size={20} className="animate-spin text-gray-400" /> : <LayoutGrid size={20} />}
-        <span className={tooltipClass}>Organize</span>
-      </button>
+        <button
+          className={btnClass}
+          onClick={onAutoLayout}
+          title="Organize"
+        >
+          <LayoutGrid size={20} />
+        </button>
 
-      <div className="w-px h-6 bg-gray-200 mx-1" />
+        <button className={btnClass} title="Color">
+          <Droplet size={20} />
+        </button>
 
-      <button className={btnClass} onClick={() => onAddItem('sticky')}>
-        <StickyNote size={20} />
-        <span className={tooltipClass}>Sticky</span>
-      </button>
+        <button
+          className={btnClass}
+          onClick={onNewSpace}
+          title="New Space"
+        >
+          <FolderPlus size={20} />
+        </button>
 
-      <button className={btnClass} onClick={() => onAddItem('note')}>
-        <Type size={20} />
-        <span className={tooltipClass}>Note</span>
-      </button>
+        <button
+          className={`${btnClass} ${hasSelection ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20' : 'opacity-30 cursor-not-allowed'}`}
+          onClick={hasSelection ? onDeleteSelected : undefined}
+          title="Delete"
+          disabled={!hasSelection}
+        >
+          <Trash2 size={20} />
+        </button>
+      </div>
 
-      <div className="w-px h-6 bg-gray-200 mx-1" />
+      {/* Creation Buttons - Bottom Right */}
+      <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
+        {/* Space Indicator */}
+        {spaces.length > 1 && (
+          <div className="bg-gray-900/95 backdrop-blur-xl rounded-full px-2 py-1.5 shadow-xl border border-white/10">
+            <SpaceIndicator
+              spaces={spaces}
+              activeSpaceId={activeSpaceId}
+              onNavigate={onNavigateSpace}
+            />
+          </div>
+        )}
 
-      <button className={btnClass} onClick={() => onAddItem('image')}>
-        <ImageIcon size={20} />
-        <span className={tooltipClass}>Image</span>
-      </button>
+        {/* Add Menu Dropdown */}
+        {showAddMenu && (
+          <div className="absolute bottom-16 right-0 bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <button
+              className={addBtnClass}
+              onClick={() => { onAddItem('sticky'); setShowAddMenu(false); }}
+            >
+              <StickyNote size={18} />
+              <span className="text-sm">Sticky Note</span>
+            </button>
+            <button
+              className={addBtnClass}
+              onClick={() => { onAddItem('note'); setShowAddMenu(false); }}
+            >
+              <Type size={18} />
+              <span className="text-sm">Note</span>
+            </button>
+            <button
+              className={addBtnClass}
+              onClick={() => { onAddItem('image'); setShowAddMenu(false); }}
+            >
+              <ImageIcon size={18} />
+              <span className="text-sm">Image</span>
+            </button>
+            <button
+              className={addBtnClass}
+              onClick={() => { onAddItem('folder'); setShowAddMenu(false); }}
+            >
+              <FolderPlus size={18} />
+              <span className="text-sm">Folder</span>
+            </button>
+          </div>
+        )}
 
-      <button className={btnClass} onClick={() => onAddItem('folder')}>
-        <FolderPlus size={20} />
-        <span className={tooltipClass}>New Space</span>
-      </button>
+        <button
+          className={`bg-gray-900 text-white p-3.5 rounded-full hover:bg-black transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 ${showAddMenu ? 'rotate-45' : ''}`}
+          onClick={() => setShowAddMenu(!showAddMenu)}
+        >
+          {showAddMenu ? <X size={22} /> : <Plus size={22} />}
+        </button>
+      </div>
 
-      <button className="bg-gray-900 text-white p-3.5 rounded-full hover:bg-black transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 ml-2">
-        <Plus size={22} />
-      </button>
-    </div>
+      {/* Click outside to close */}
+      {showAddMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowAddMenu(false)}
+        />
+      )}
+    </>
   );
 };

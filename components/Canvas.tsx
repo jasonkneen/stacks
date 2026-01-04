@@ -19,6 +19,7 @@ interface CanvasProps {
   onConnect: (fromId: string, toId: string) => void;
   onDeleteConnection: (connectionId: string) => void;
   onDropFiles: (files: File[], position: { x: number; y: number }) => void;
+  onMarkManuallyPositioned: (ids: string[]) => void;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -37,7 +38,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onStackItems,
   onConnect,
   onDeleteConnection,
-  onDropFiles
+  onDropFiles,
+  onMarkManuallyPositioned
 }) => {
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
@@ -371,20 +373,26 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId) {
+        // Mark dragged items as manually positioned
+        const draggedIds = selection.has(draggingId)
+          ? Array.from(selection).filter(id => items.find(i => i.id === id))
+          : [draggingId];
+        onMarkManuallyPositioned(draggedIds);
+
         // --- STACKING DETECTION ---
         const draggedItem = items.find(i => i.id === draggingId);
         if (draggedItem) {
              const centerX = draggedItem.x + draggedItem.w / 2;
              const centerY = draggedItem.y + draggedItem.h / 2;
- 
+
              for (const item of items) {
                  if (item.id === draggingId) continue;
-                 
+
                  // Check if center of dragged item is inside another item's bounding box
                  if (
-                     centerX > item.x && 
+                     centerX > item.x &&
                      centerX < item.x + item.w &&
-                     centerY > item.y && 
+                     centerY > item.y &&
                      centerY < item.y + item.h
                  ) {
                      onStackItems(draggingId, item.id);
