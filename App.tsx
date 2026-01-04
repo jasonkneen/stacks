@@ -20,8 +20,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: '1',
         type: 'note',
-        x: 100,
-        y: 100,
+        x: -400,
+        y: -250,
         w: 320,
         h: 400,
         zIndex: 1,
@@ -31,8 +31,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: '2',
         type: 'sticky',
-        x: 500,
-        y: 150,
+        x: 0,
+        y: -200,
         w: 220,
         h: 220,
         zIndex: 2,
@@ -43,8 +43,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: '3',
         type: 'image',
-        x: 150,
-        y: 600,
+        x: -350,
+        y: 200,
         w: 400,
         h: 300,
         zIndex: 3,
@@ -55,8 +55,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: '4',
         type: 'folder',
-        x: 600,
-        y: 500,
+        x: 100,
+        y: 100,
         w: 200,
         h: 240,
         zIndex: 4,
@@ -67,8 +67,8 @@ const INITIAL_SPACES: Record<string, Space> = {
        {
         id: '5',
         type: 'video',
-        x: 850,
-        y: 100,
+        x: 300,
+        y: -250,
         w: 300,
         h: 200,
         zIndex: 5,
@@ -88,8 +88,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: 'pa-1',
         type: 'sticky',
-        x: 50,
-        y: 50,
+        x: -300,
+        y: -150,
         w: 250,
         h: 250,
         zIndex: 1,
@@ -100,8 +100,8 @@ const INITIAL_SPACES: Record<string, Space> = {
       {
         id: 'pa-2',
         type: 'image',
-        x: 300,
-        y: 50,
+        x: 50,
+        y: -150,
         w: 400,
         h: 300,
         zIndex: 2,
@@ -153,6 +153,7 @@ const App: React.FC = () => {
   const [spaces, setSpaces] = useState<Record<string, Space>>(INITIAL_SPACES);
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
   const [mediaViewerItem, setMediaViewerItem] = useState<SpatialItem | null>(null);
+  const [mediaViewerRect, setMediaViewerRect] = useState<DOMRect | null>(null);
   const [isLayouting, setIsLayouting] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [showAIModal, setShowAIModal] = useState(false);
@@ -179,6 +180,20 @@ const App: React.FC = () => {
     updateItems(newItems);
   }, [activeSpace.items, updateItems]);
 
+  // Helper to trigger auto-fit view
+  const triggerAutoFit = useCallback(() => {
+    setTimeout(() => {
+      setSpaces(currentSpaces => {
+        const items = currentSpaces[activeSpaceId]?.items || [];
+        if (items.length > 0) {
+          const fitParams = getFitToViewParams(items);
+          setCameraOverride({ ...fitParams, id: Date.now().toString() });
+        }
+        return currentSpaces; // No mutation, just reading
+      });
+    }, 50);
+  }, [activeSpaceId]);
+
   // Delete items
   const handleDeleteItems = useCallback((ids: Set<string>) => {
     setSpaces(prev => {
@@ -186,7 +201,7 @@ const App: React.FC = () => {
         const newItems = space.items.filter(i => !ids.has(i.id));
         // Remove connections attached to deleted items
         const newConnections = (space.connections || []).filter(c => !ids.has(c.from) && !ids.has(c.to));
-        
+
         return {
             ...prev,
             [activeSpaceId]: {
@@ -196,12 +211,223 @@ const App: React.FC = () => {
             }
         };
     });
-    setSelection(new Set()); // Clear selection after delete
-  }, [activeSpaceId]);
+    setSelection(new Set());
+    triggerAutoFit();
+  }, [activeSpaceId, triggerAutoFit]);
+
+  // Ungroup a stack/folder back into individual items
+  const handleUngroup = useCallback((folderId: string) => {
+    setSpaces(prev => {
+      const space = prev[activeSpaceId];
+      const folder = space.items.find(i => i.id === folderId);
+
+      if (!folder || folder.type !== 'folder' || !folder.linkedSpaceId) return prev;
+
+      const linkedSpace = prev[folder.linkedSpaceId];
+      if (!linkedSpace) return prev;
+
+      // Position items around where the folder was
+      const unpackedItems = linkedSpace.items.map((item, index) => ({
+        ...item,
+        x: folder.x + (index % 3) * 40 - 40,
+        y: folder.y + Math.floor(index / 3) * 40 - 40,
+        zIndex: Math.max(...space.items.map(i => i.zIndex), 0) + index + 1
+      }));
+
+      // Remove folder, add unpacked items
+      const newItems = [
+        ...space.items.filter(i => i.id !== folderId),
+        ...unpackedItems
+      ];
+
+      // Update connections: redirect folder connections to first unpacked item
+      const firstUnpackedId = unpackedItems[0]?.id;
+      const newConnections = (space.connections || []).map(conn => ({
+        ...conn,
+        from: conn.from === folderId && firstUnpackedId ? firstUnpackedId : conn.from,
+        to: conn.to === folderId && firstUnpackedId ? firstUnpackedId : conn.to
+      }));
+
+      // Remove the linked space
+      const { [folder.linkedSpaceId]: _, ...remainingSpaces } = prev;
+
+      return {
+        ...remainingSpaces,
+        [activeSpaceId]: {
+          ...space,
+          items: newItems,
+          connections: newConnections
+        }
+      };
+    });
+    setSelection(new Set());
+    triggerAutoFit();
+  }, [activeSpaceId, triggerAutoFit]);
+
+  // Group selected items into a new stack
+  const handleGroupToStack = useCallback((ids: Set<string>) => {
+    setSpaces(prev => {
+      const space = prev[activeSpaceId];
+      const selectedItems = space.items.filter(i => ids.has(i.id));
+      const remainingItems = space.items.filter(i => !ids.has(i.id));
+
+      if (selectedItems.length < 2) return prev;
+
+      // Calculate center of selected items
+      const centerX = selectedItems.reduce((sum, i) => sum + i.x + i.w / 2, 0) / selectedItems.length;
+      const centerY = selectedItems.reduce((sum, i) => sum + i.y + i.h / 2, 0) / selectedItems.length;
+
+      // Create new space ID
+      const newSpaceId = `stack-${Date.now()}`;
+
+      // Reposition items relative to (0,0) for the new space
+      const stackedItems = selectedItems.map(item => ({
+        ...item,
+        x: item.x - centerX + item.w / 2,
+        y: item.y - centerY + item.h / 2,
+      }));
+
+      // Create the folder item
+      const folderId = `folder-${Date.now()}`;
+      const folderItem: SpatialItem = {
+        id: folderId,
+        type: 'folder',
+        x: centerX - 100,
+        y: centerY - 120,
+        w: 200,
+        h: 240,
+        zIndex: Math.max(...space.items.map(i => i.zIndex), 0) + 1,
+        rotation: 0,
+        content: `Stack (${selectedItems.length})`,
+        linkedSpaceId: newSpaceId
+      };
+
+      // Update connections: redirect any pointing to selected items to point to folder
+      const updatedConnections = (space.connections || []).map(conn => {
+        let newConn = { ...conn };
+        if (ids.has(conn.from)) newConn.from = folderId;
+        if (ids.has(conn.to)) newConn.to = folderId;
+        return newConn;
+      }).filter(conn => conn.from !== conn.to); // Remove self-loops
+
+      // Dedupe connections
+      const seenConnections = new Set<string>();
+      const dedupedConnections = updatedConnections.filter(conn => {
+        const key = `${conn.from}-${conn.to}`;
+        if (seenConnections.has(key)) return false;
+        seenConnections.add(key);
+        return true;
+      });
+
+      return {
+        ...prev,
+        [activeSpaceId]: {
+          ...space,
+          items: [...remainingItems, folderItem],
+          connections: dedupedConnections
+        },
+        [newSpaceId]: {
+          id: newSpaceId,
+          name: `Stack (${selectedItems.length})`,
+          parentId: activeSpaceId,
+          items: stackedItems,
+          connections: [],
+          camera: { x: 0, y: 0, zoom: 1 }
+        }
+      };
+    });
+    setSelection(new Set());
+    triggerAutoFit();
+  }, [activeSpaceId, triggerAutoFit]);
 
   const getSpaceItems = useCallback((spaceId: string) => {
     return spaces[spaceId]?.items || [];
   }, [spaces]);
+
+  // Handle file drops
+  const handleDropFiles = useCallback(async (files: File[], position: { x: number; y: number }) => {
+    const readFile = (file: File): Promise<string> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const newItems: SpatialItem[] = [];
+    const baseZIndex = Math.max(...(spaces[activeSpaceId]?.items.map(i => i.zIndex) || [0]), 0);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const dataUrl = await readFile(file);
+      const isVideo = file.type.startsWith('video/');
+
+      newItems.push({
+        id: `drop-${Date.now()}-${i}`,
+        type: isVideo ? 'video' : 'image',
+        x: position.x + (i % 3) * 40 - 40,
+        y: position.y + Math.floor(i / 3) * 40 - 40,
+        w: 300,
+        h: isVideo ? 200 : 250,
+        zIndex: baseZIndex + i + 1,
+        rotation: (Math.random() - 0.5) * 6,
+        content: dataUrl,
+        metadata: {
+          filename: file.name,
+          size: `${(file.size / 1024 / 1024).toFixed(1)}MB`,
+          type: file.type
+        }
+      });
+    }
+
+    // If multiple files, create a stack
+    if (newItems.length > 1) {
+      const newSpaceId = `drop-stack-${Date.now()}`;
+      const folderId = `folder-${Date.now()}`;
+
+      const folderItem: SpatialItem = {
+        id: folderId,
+        type: 'folder',
+        x: position.x - 100,
+        y: position.y - 120,
+        w: 200,
+        h: 240,
+        zIndex: baseZIndex + 1,
+        rotation: 0,
+        content: `Dropped (${newItems.length})`,
+        linkedSpaceId: newSpaceId
+      };
+
+      // Reposition items for stack space
+      const stackItems = newItems.map((item, idx) => ({
+        ...item,
+        x: (idx % 3) * 60 - 60,
+        y: Math.floor(idx / 3) * 60 - 60,
+        zIndex: idx + 1
+      }));
+
+      setSpaces(prev => ({
+        ...prev,
+        [activeSpaceId]: {
+          ...prev[activeSpaceId],
+          items: [...prev[activeSpaceId].items, folderItem]
+        },
+        [newSpaceId]: {
+          id: newSpaceId,
+          name: `Dropped (${newItems.length})`,
+          parentId: activeSpaceId,
+          items: stackItems,
+          connections: [],
+          camera: { x: 0, y: 0, zoom: 1 }
+        }
+      }));
+      triggerAutoFit();
+    } else if (newItems.length === 1) {
+      // Single file, just add it
+      updateItems([...spaces[activeSpaceId].items, newItems[0]]);
+      triggerAutoFit();
+    }
+  }, [activeSpaceId, spaces, updateItems, triggerAutoFit]);
 
   const handleConnect = useCallback((fromId: string, toId: string) => {
       setSpaces(prev => {
@@ -223,6 +449,97 @@ const App: React.FC = () => {
               }
           };
       });
+  }, [activeSpaceId]);
+
+  const handleDeleteConnection = useCallback((connectionId: string) => {
+      setSpaces(prev => {
+          const space = prev[activeSpaceId];
+          return {
+              ...prev,
+              [activeSpaceId]: {
+                  ...space,
+                  connections: (space.connections || []).filter(c => c.id !== connectionId)
+              }
+          };
+      });
+  }, [activeSpaceId]);
+
+  // Handle variant creation from MediaViewer
+  const handleCreateVariant = useCallback((originalItem: SpatialItem, variantUrl: string, prompt: string) => {
+    setSpaces(prev => {
+      const space = prev[activeSpaceId];
+
+      // Create variant item
+      const variantItem: SpatialItem = {
+        id: `variant-${Date.now()}`,
+        type: originalItem.type,
+        x: 20,
+        y: 20,
+        w: originalItem.w,
+        h: originalItem.h,
+        zIndex: 2,
+        rotation: (Math.random() - 0.5) * 4,
+        content: variantUrl,
+        metadata: {
+          ...originalItem.metadata,
+          prompt,
+          isVariant: true,
+          originalId: originalItem.id
+        }
+      };
+
+      // Create new space for the stack
+      const newSpaceId = `variants-${Date.now()}`;
+
+      // Create folder to replace original
+      const folderItem: SpatialItem = {
+        id: `folder-${Date.now()}`,
+        type: 'folder',
+        x: originalItem.x,
+        y: originalItem.y,
+        w: 200,
+        h: 240,
+        zIndex: originalItem.zIndex,
+        rotation: 0,
+        content: 'Variants',
+        linkedSpaceId: newSpaceId
+      };
+
+      // Remove original, add folder
+      const newItems = space.items.map(i =>
+        i.id === originalItem.id ? folderItem : i
+      );
+
+      // Update connections to point to folder
+      const newConnections = (space.connections || []).map(conn => ({
+        ...conn,
+        from: conn.from === originalItem.id ? folderItem.id : conn.from,
+        to: conn.to === originalItem.id ? folderItem.id : conn.to
+      }));
+
+      return {
+        ...prev,
+        [activeSpaceId]: {
+          ...space,
+          items: newItems,
+          connections: newConnections
+        },
+        [newSpaceId]: {
+          id: newSpaceId,
+          name: 'Variants',
+          parentId: activeSpaceId,
+          items: [
+            { ...originalItem, x: -20, y: -20, zIndex: 1, rotation: -2 },
+            variantItem
+          ],
+          connections: [],
+          camera: { x: 0, y: 0, zoom: 1 }
+        }
+      };
+    });
+
+    // Close viewer and show the new stack
+    setMediaViewerItem(null);
   }, [activeSpaceId]);
 
   // Handle Stacking Interaction
@@ -366,30 +683,35 @@ const App: React.FC = () => {
   const handleNavigate = (targetSpaceId: string) => {
     if (spaces[targetSpaceId]) {
       const targetSpace = spaces[targetSpaceId];
-      
-      // Calculate fit bounds for the target space if it has items
-      // This ensures we always "see" the content when entering
-      if (targetSpace.items.length > 0) {
-          const fitParams = getFitToViewParams(targetSpace.items);
-          
-          setSpaces(prev => ({
-              ...prev,
-              [targetSpaceId]: {
-                  ...prev[targetSpaceId],
-                  camera: fitParams
-              }
-          }));
-      }
 
       setActiveSpaceId(targetSpaceId);
-      setSelection(new Set()); // Clear selection on navigate
+      setSelection(new Set());
+
+      // Force camera fit AFTER Canvas remounts
+      if (targetSpace.items.length > 0) {
+        setTimeout(() => {
+          const fitParams = getFitToViewParams(targetSpace.items);
+          setCameraOverride({ ...fitParams, id: Date.now().toString() });
+        }, 0);
+      }
     }
   };
 
   const handleBack = () => {
     if (activeSpace.parentId) {
-      setActiveSpaceId(activeSpace.parentId);
+      const parentId = activeSpace.parentId;
+      const parentSpace = spaces[parentId];
+
+      setActiveSpaceId(parentId);
       setSelection(new Set());
+
+      // Force camera fit AFTER Canvas remounts
+      if (parentSpace && parentSpace.items.length > 0) {
+        setTimeout(() => {
+          const fitParams = getFitToViewParams(parentSpace.items);
+          setCameraOverride({ ...fitParams, id: Date.now().toString() });
+        }, 0);
+      }
     }
   };
 
@@ -450,19 +772,26 @@ const App: React.FC = () => {
             onSelectionChange={setSelection}
             onUpdateItems={updateItems}
             onNavigate={handleNavigate}
-            onOpenMedia={setMediaViewerItem}
+            onOpenMedia={(item, rect) => {
+              setMediaViewerRect(rect);
+              setMediaViewerItem(item);
+            }}
             getSpaceItems={getSpaceItems}
             onStackItems={handleStackItems}
             onConnect={handleConnect}
+            onDeleteConnection={handleDeleteConnection}
+            onDropFiles={handleDropFiles}
         />
       </div>
 
       {/* Slide-up Context Toolbar */}
-      <ContextToolbar 
-          selection={selection} 
+      <ContextToolbar
+          selection={selection}
           items={activeSpace.items}
           onUpdateItem={handleUpdateItem}
           onDelete={handleDeleteItems}
+          onGroupToStack={handleGroupToStack}
+          onUngroup={handleUngroup}
       />
 
       {/* Creation Toolbar (Bottom Right) */}
@@ -529,7 +858,15 @@ const App: React.FC = () => {
 
       {/* Media Viewer Modal */}
       {mediaViewerItem && (
-        <MediaViewer item={mediaViewerItem} onClose={() => setMediaViewerItem(null)} />
+        <MediaViewer
+          item={mediaViewerItem}
+          sourceRect={mediaViewerRect}
+          onClose={() => {
+            setMediaViewerItem(null);
+            setMediaViewerRect(null);
+          }}
+          onCreateVariant={handleCreateVariant}
+        />
       )}
     </div>
   );

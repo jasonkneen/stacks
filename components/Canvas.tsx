@@ -11,25 +11,29 @@ interface CanvasProps {
   onSelectionChange: (ids: Set<string>) => void;
   onUpdateItems: (items: SpatialItem[]) => void;
   onNavigate: (spaceId: string) => void;
-  onOpenMedia: (item: SpatialItem) => void;
+  onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onStackItems: (sourceId: string, targetId: string) => void;
   onConnect: (fromId: string, toId: string) => void;
+  onDeleteConnection: (connectionId: string) => void;
+  onDropFiles: (files: File[], position: { x: number; y: number }) => void;
 }
 
-export const Canvas: React.FC<CanvasProps> = ({ 
-  items, 
+export const Canvas: React.FC<CanvasProps> = ({
+  items,
   connections,
   initialCamera = { x: 0, y: 0, zoom: 1 },
   cameraOverride,
   selection,
   onSelectionChange,
-  onUpdateItems, 
-  onNavigate, 
-  onOpenMedia, 
+  onUpdateItems,
+  onNavigate,
+  onOpenMedia,
   getSpaceItems,
   onStackItems,
-  onConnect
+  onConnect,
+  onDeleteConnection,
+  onDropFiles
 }) => {
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
@@ -46,6 +50,8 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number } | null>(null);
   
   // Panning & Selection Modes
   const [isPanning, setIsPanning] = useState(false);
@@ -56,6 +62,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Connection State
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [connectingLine, setConnectingLine] = useState<{ fromId: string, startX: number, startY: number, endX: number, endY: number } | null>(null);
+
+  // Drag & Drop State
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   
@@ -97,43 +106,47 @@ export const Canvas: React.FC<CanvasProps> = ({
     };
   }, []);
 
-  // --- Zoom Logic (Zoom to Cursor) ---
+  // --- Zoom Logic (Scroll to Zoom, unless over scrollable element) ---
   const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    
-    if (e.ctrlKey || e.metaKey) {
-      // Zoom
-      const zoomSensitivity = 0.0015;
-      const delta = -e.deltaY * zoomSensitivity;
-      
-      setCamera(prev => {
-        const newZoom = Math.min(Math.max(prev.zoom + delta, 0.1), 5);
-        
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
+    // Check if target is inside a scrollable element
+    let target = e.target as HTMLElement | null;
+    while (target && target !== canvasRef.current) {
+      const { overflowY, overflowX } = getComputedStyle(target);
+      const isScrollableY = (overflowY === 'auto' || overflowY === 'scroll') && target.scrollHeight > target.clientHeight;
+      const isScrollableX = (overflowX === 'auto' || overflowX === 'scroll') && target.scrollWidth > target.clientWidth;
 
-        const offsetBeforeX = prev.x;
-        const offsetBeforeY = prev.y;
-
-        const worldX = (mouseX - centerX - offsetBeforeX) / prev.zoom;
-        const worldY = (mouseY - centerY - offsetBeforeY) / prev.zoom;
-
-        const newX = mouseX - centerX - (worldX * newZoom);
-        const newY = mouseY - centerY - (worldY * newZoom);
-
-        return { x: newX, y: newY, zoom: newZoom };
-      });
-    } else {
-      // Pan (Trackpad/MouseWheel)
-      cancelAnimationFrame(animationFrameRef.current);
-      setCamera(prev => ({
-        ...prev,
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY,
-      }));
+      if (isScrollableY || isScrollableX) {
+        // Let the element scroll naturally
+        return;
+      }
+      target = target.parentElement;
     }
+
+    e.preventDefault();
+
+    // Zoom to cursor
+    const zoomSensitivity = 0.003;
+    const delta = -e.deltaY * zoomSensitivity;
+
+    setCamera(prev => {
+      const newZoom = Math.min(Math.max(prev.zoom + delta, 0.1), 5);
+
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      const offsetBeforeX = prev.x;
+      const offsetBeforeY = prev.y;
+
+      const worldX = (mouseX - centerX - offsetBeforeX) / prev.zoom;
+      const worldY = (mouseY - centerY - offsetBeforeY) / prev.zoom;
+
+      const newX = mouseX - centerX - (worldX * newZoom);
+      const newY = mouseY - centerY - (worldY * newZoom);
+
+      return { x: newX, y: newY, zoom: newZoom };
+    });
   }, []);
 
   // --- Inertia Loop ---
@@ -222,7 +235,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handleConnectStart = (e: React.MouseEvent, fromId: string) => {
       e.stopPropagation();
       e.preventDefault();
-      
+
       const worldPos = screenToWorld(e.clientX, e.clientY);
       setConnectingLine({
           fromId,
@@ -231,6 +244,21 @@ export const Canvas: React.FC<CanvasProps> = ({
           endX: worldPos.x,
           endY: worldPos.y
       });
+  };
+
+  const handleResizeStart = (e: React.MouseEvent, itemId: string) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+
+      setResizingId(itemId);
+      resizeStartRef.current = {
+          w: item.w,
+          h: item.h,
+          mouseX: e.clientX,
+          mouseY: e.clientY
+      };
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -242,6 +270,26 @@ export const Canvas: React.FC<CanvasProps> = ({
     velocityRef.current = { x: deltaX, y: deltaY };
 
     const worldPos = screenToWorld(e.clientX, e.clientY);
+
+    // Handle resize
+    if (resizingId && resizeStartRef.current) {
+        const startData = resizeStartRef.current;
+        const deltaMouseX = e.clientX - startData.mouseX;
+        const deltaMouseY = e.clientY - startData.mouseY;
+
+        // Scale delta by zoom level
+        const scaledDeltaX = deltaMouseX / camera.zoom;
+        const scaledDeltaY = deltaMouseY / camera.zoom;
+
+        const newW = Math.max(80, startData.w + scaledDeltaX);
+        const newH = Math.max(80, startData.h + scaledDeltaY);
+
+        const updatedItems = items.map(item =>
+            item.id === resizingId ? { ...item, w: newW, h: newH } : item
+        );
+        onUpdateItems(updatedItems);
+        return;
+    }
 
     if (connectingLine) {
         setConnectingLine(prev => prev ? { ...prev, endX: worldPos.x, endY: worldPos.y } : null);
@@ -300,9 +348,16 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         onSelectionChange(newSelection);
     }
-  }, [isPanning, draggingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
+  }, [isPanning, draggingId, resizingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
+    // Clear resize state
+    if (resizingId) {
+        setResizingId(null);
+        resizeStartRef.current = null;
+        return;
+    }
+
     if (connectingLine) {
         // Check for connection drop
         if (hoveredItemId && hoveredItemId !== connectingLine.fromId) {
@@ -342,10 +397,10 @@ export const Canvas: React.FC<CanvasProps> = ({
     setDraggingId(null);
     setDragTilt(0);
     setSelectionBox(null);
-  }, [isPanning, draggingId, items, onStackItems, connectingLine, hoveredItemId, onConnect]); 
+  }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect]); 
 
   useEffect(() => {
-    if (isPanning || draggingId || selectionBox || connectingLine) {
+    if (isPanning || draggingId || resizingId || selectionBox || connectingLine) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       return () => {
@@ -353,17 +408,47 @@ export const Canvas: React.FC<CanvasProps> = ({
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isPanning, draggingId, selectionBox, handleMouseMove, handleMouseUp, connectingLine]);
+  }, [isPanning, draggingId, resizingId, selectionBox, handleMouseMove, handleMouseUp, connectingLine]);
+
+  // --- Drag & Drop Handlers ---
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(file =>
+      file.type.startsWith('image/') || file.type.startsWith('video/')
+    );
+
+    if (files.length > 0) {
+      const worldPos = screenToWorld(e.clientX, e.clientY);
+      onDropFiles(files, worldPos);
+    }
+  }, [screenToWorld, onDropFiles]);
 
   return (
-    <div 
+    <div
       ref={canvasRef}
       id="canvas-bg"
-      className="w-full h-full relative overflow-hidden"
+      className={`w-full h-full relative overflow-hidden transition-colors duration-200 ${isDragOver ? 'bg-blue-50' : ''}`}
       onMouseDown={handleMouseDown}
-      style={{ 
-        cursor: isPanning || isSpacePressed ? 'grab' : draggingId ? 'grabbing' : connectingLine ? 'crosshair' : 'default',
-        // Removed dot background per previous instruction (confirmed by user prompt context)
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{
+        cursor: resizingId ? 'se-resize' : isPanning || isSpacePressed ? 'grab' : draggingId ? 'grabbing' : connectingLine ? 'crosshair' : 'default',
       }}
     >
       <div 
@@ -375,7 +460,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         }}
       >
         {/* Connections Layer (Below Items) */}
-        <svg className="absolute top-0 left-0 overflow-visible pointer-events-none" style={{ zIndex: 0 }}>
+        <svg className="absolute top-0 left-0 overflow-visible" style={{ zIndex: 0 }}>
             <defs>
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                     <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
@@ -386,43 +471,105 @@ export const Canvas: React.FC<CanvasProps> = ({
                 const toItem = items.find(i => i.id === conn.to);
                 if (!fromItem || !toItem) return null;
 
-                const startX = fromItem.x + fromItem.w / 2;
-                const startY = fromItem.y + fromItem.h / 2;
-                const endX = toItem.x + toItem.w / 2;
-                const endY = toItem.y + toItem.h / 2;
+                // Calculate nearest edge points (handle to handle)
+                const fromCenterX = fromItem.x + fromItem.w / 2;
+                const fromCenterY = fromItem.y + fromItem.h / 2;
+                const toCenterX = toItem.x + toItem.w / 2;
+                const toCenterY = toItem.y + toItem.h / 2;
+
+                // Determine best connection points based on relative positions
+                let startX, startY, endX, endY;
+                const dx = toCenterX - fromCenterX;
+                const dy = toCenterY - fromCenterY;
+
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    // Horizontal connection
+                    if (dx > 0) {
+                        startX = fromItem.x + fromItem.w; startY = fromCenterY; // Right
+                        endX = toItem.x; endY = toCenterY; // Left
+                    } else {
+                        startX = fromItem.x; startY = fromCenterY; // Left
+                        endX = toItem.x + toItem.w; endY = toCenterY; // Right
+                    }
+                } else {
+                    // Vertical connection
+                    if (dy > 0) {
+                        startX = fromCenterX; startY = fromItem.y + fromItem.h; // Bottom
+                        endX = toCenterX; endY = toItem.y; // Top
+                    } else {
+                        startX = fromCenterX; startY = fromItem.y; // Top
+                        endX = toCenterX; endY = toItem.y + toItem.h; // Bottom
+                    }
+                }
+
+                const midX = (startX + endX) / 2;
+                const midY = (startY + endY) / 2;
 
                 return (
-                    <path 
-                        key={conn.id}
-                        d={`M ${startX} ${startY} C ${startX} ${(startY + endY)/2}, ${endX} ${(startY + endY)/2}, ${endX} ${endY}`}
-                        stroke="#cbd5e1"
-                        strokeWidth="2"
-                        fill="none"
-                        markerEnd="url(#arrowhead)"
-                    />
+                    <g key={conn.id} className="group/edge cursor-pointer" onClick={() => onDeleteConnection(conn.id)}>
+                        {/* Invisible wider path for easier clicking */}
+                        <path
+                            d={`M ${startX} ${startY} C ${startX + (endX - startX) * 0.5} ${startY}, ${endX - (endX - startX) * 0.5} ${endY}, ${endX} ${endY}`}
+                            stroke="transparent"
+                            strokeWidth="20"
+                            fill="none"
+                        />
+                        {/* Visible path */}
+                        <path
+                            d={`M ${startX} ${startY} C ${startX + (endX - startX) * 0.5} ${startY}, ${endX - (endX - startX) * 0.5} ${endY}, ${endX} ${endY}`}
+                            stroke="#cbd5e1"
+                            strokeWidth="2"
+                            fill="none"
+                            markerEnd="url(#arrowhead)"
+                            className="group-hover/edge:stroke-red-400 transition-colors"
+                        />
+                        {/* Delete indicator on hover */}
+                        <circle
+                            cx={midX}
+                            cy={midY}
+                            r="8"
+                            fill="white"
+                            stroke="#ef4444"
+                            strokeWidth="2"
+                            className="opacity-0 group-hover/edge:opacity-100 transition-opacity"
+                        />
+                        <text
+                            x={midX}
+                            y={midY + 1}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize="12"
+                            fontWeight="bold"
+                            fill="#ef4444"
+                            className="opacity-0 group-hover/edge:opacity-100 transition-opacity pointer-events-none"
+                        >×</text>
+                    </g>
                 );
             })}
             {connectingLine && (
-                <path 
+                <path
                     d={`M ${connectingLine.startX} ${connectingLine.startY} L ${connectingLine.endX} ${connectingLine.endY}`}
                     stroke="#94a3b8"
                     strokeWidth="2"
                     strokeDasharray="5,5"
                     fill="none"
+                    className="pointer-events-none"
                 />
             )}
         </svg>
 
         {items.map(item => (
-          <ItemRenderer 
+          <ItemRenderer
             key={item.id}
             item={item}
             isSelected={selection.has(item.id)}
             isDragging={draggingId === item.id}
+            isResizing={resizingId === item.id}
             dragTilt={draggingId === item.id ? dragTilt : 0}
             onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+            onResizeStart={handleResizeStart}
             onNavigate={onNavigate}
-            onOpenMedia={onOpenMedia}
+            onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
             onUpdateContent={(content) => {
                 const updated = items.map(i => i.id === item.id ? { ...i, content } : i);
                 onUpdateItems(updated);
@@ -451,6 +598,15 @@ export const Canvas: React.FC<CanvasProps> = ({
       <div className="absolute bottom-8 left-8 text-gray-400 text-xs pointer-events-none select-none">
           Space + Drag to pan
       </div>
+
+      {/* Drop Zone Indicator */}
+      {isDragOver && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50">
+          <div className="bg-blue-500/20 border-2 border-dashed border-blue-500 rounded-3xl px-12 py-8 backdrop-blur-sm">
+            <p className="text-blue-600 font-semibold text-lg">Drop files here</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

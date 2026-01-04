@@ -1,17 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SpatialItem } from '../types';
 import { Play } from 'lucide-react';
 
 interface Props {
   item: SpatialItem;
-  onDoubleClick: () => void;
+  onDoubleClick: (rect: DOMRect) => void;
 }
 
 export const MediaComponent: React.FC<Props> = ({ item, onDoubleClick }) => {
   const [loaded, setLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleDoubleClick = () => {
+    if (containerRef.current) {
+      onDoubleClick(containerRef.current.getBoundingClientRect());
+    }
+  };
 
   return (
-    <div className="w-full h-full relative group bg-gray-900 flex items-center justify-center overflow-hidden" onDoubleClick={onDoubleClick}>
+    <div
+      ref={containerRef}
+      className="w-full h-full relative group bg-gray-900 flex items-center justify-center overflow-hidden"
+      onDoubleClick={handleDoubleClick}
+    >
       
       {/* Loading Skeleton */}
       {!loaded && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, FolderPlus, FolderOpen } from 'lucide-react';
 import { SpatialItem } from '../types';
 
 interface Props {
@@ -7,6 +7,8 @@ interface Props {
   items: SpatialItem[];
   onUpdateItem: (id: string, changes: Partial<SpatialItem>) => void;
   onDelete: (ids: Set<string>) => void;
+  onGroupToStack: (ids: Set<string>) => void;
+  onUngroup: (folderId: string) => void;
 }
 
 const COLORS = [
@@ -18,12 +20,15 @@ const COLORS = [
   { class: 'bg-gray-100', label: 'White' },
 ];
 
-export const ContextToolbar: React.FC<Props> = ({ selection, items, onUpdateItem, onDelete }) => {
+export const ContextToolbar: React.FC<Props> = ({ selection, items, onUpdateItem, onDelete, onGroupToStack, onUngroup }) => {
   const isVisible = selection.size > 0;
-  
+
   // Calculate if we should show color picker
   const selectedItems = items.filter(i => selection.has(i.id));
   const hasSticky = selectedItems.some(i => i.type === 'sticky');
+
+  // Check if single folder selected (for ungroup)
+  const singleFolder = selection.size === 1 && selectedItems[0]?.type === 'folder' ? selectedItems[0] : null;
   
   // Common visual wrapper
   // Using fixed position bottom-center, sliding up when active
@@ -68,8 +73,30 @@ export const ContextToolbar: React.FC<Props> = ({ selection, items, onUpdateItem
         )}
         {selection.size > 1 && <div className="w-px h-5 bg-gray-300 mx-1" />}
 
-        {/* Common Actions */}
-        <button 
+        {/* Group to Stack (Only if multiple items selected) */}
+        {selection.size > 1 && (
+          <button
+            onClick={() => onGroupToStack(selection)}
+            className="p-2 hover:bg-blue-50 text-gray-500 hover:text-blue-500 rounded-full transition-colors group"
+            title="Group to Stack"
+          >
+            <FolderPlus size={18} className="transition-transform group-hover:scale-110 group-active:scale-95" />
+          </button>
+        )}
+
+        {/* Ungroup (Only if single folder selected) */}
+        {singleFolder && singleFolder.linkedSpaceId && (
+          <button
+            onClick={() => onUngroup(singleFolder.id)}
+            className="p-2 hover:bg-orange-50 text-gray-500 hover:text-orange-500 rounded-full transition-colors group"
+            title="Ungroup Stack"
+          >
+            <FolderOpen size={18} className="transition-transform group-hover:scale-110 group-active:scale-95" />
+          </button>
+        )}
+
+        {/* Delete */}
+        <button
             onClick={() => onDelete(selection)}
             className="p-2 hover:bg-red-50 text-gray-500 hover:text-red-500 rounded-full transition-colors group"
             title="Delete"

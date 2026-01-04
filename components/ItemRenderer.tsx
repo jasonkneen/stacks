@@ -9,23 +9,27 @@ interface ItemRendererProps {
   item: SpatialItem;
   isSelected: boolean;
   isDragging?: boolean;
+  isResizing?: boolean;
   dragTilt?: number;
   onMouseDown: (e: React.MouseEvent) => void;
+  onResizeStart: (e: React.MouseEvent, id: string) => void;
   onNavigate: (spaceId: string) => void;
-  onOpenMedia: (item: SpatialItem) => void;
+  onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
   onUpdateContent: (content: string) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onHover: (id: string | null) => void;
   onConnectStart: (e: React.MouseEvent, id: string) => void;
 }
 
-export const ItemRenderer: React.FC<ItemRendererProps> = memo(({ 
-  item, 
-  isSelected, 
+export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
+  item,
+  isSelected,
   isDragging = false,
+  isResizing = false,
   dragTilt = 0,
-  onMouseDown, 
-  onNavigate, 
+  onMouseDown,
+  onResizeStart,
+  onNavigate,
   onOpenMedia,
   onUpdateContent,
   getSpaceItems,
@@ -33,12 +37,12 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onConnectStart
 }) => {
   
-  // Updated visuals: rounded-3xl (24px)
-  // Dynamic Transition: NONE during drag to prevent lag, smooth otherwise
+  // Dynamic Transition: NONE during drag/resize to prevent lag
+  const isInteracting = isDragging || isResizing;
   const commonClasses = `absolute will-change-transform group/item ${
-    isDragging 
-      ? 'shadow-[0_30px_60px_-10px_rgba(0,0,0,0.3)] z-[100] cursor-grabbing transition-none' 
-      : `transition-all duration-300 cubic-bezier(0.2, 0.8, 0.2, 1) ${isSelected ? 'ring-4 ring-blue-500/50 shadow-2xl z-50' : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'}`
+    isInteracting
+      ? 'shadow-[0_30px_60px_-10px_rgba(0,0,0,0.3)] z-[100] transition-none'
+      : `transition-shadow duration-300 ${isSelected ? 'ring-4 ring-blue-500/50 shadow-2xl z-50' : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'}`
   }`;
 
   // Calculate final transform
@@ -63,7 +67,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
         return <NoteComponent item={item} onChange={onUpdateContent} />;
       case 'image':
       case 'video':
-        return <MediaComponent item={item} onDoubleClick={() => onOpenMedia(item)} />;
+        return <MediaComponent item={item} onDoubleClick={(rect) => onOpenMedia(item, rect)} />;
       case 'folder':
         return <FolderComponent item={item} onDoubleClick={() => item.linkedSpaceId && onNavigate(item.linkedSpaceId)} getSpaceItems={getSpaceItems} />;
       default:
@@ -86,29 +90,40 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       </div>
 
       {/* Connection Handles (Visible on Group Hover) */}
-      {!isDragging && (
+      {!isDragging && !isResizing && (
           <>
             {/* Top */}
-            <div 
+            <div
                 className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
             />
             {/* Right */}
-            <div 
+            <div
                 className="absolute top-1/2 -right-3 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
             />
             {/* Bottom */}
-            <div 
+            <div
                 className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
             />
             {/* Left */}
-            <div 
+            <div
                 className="absolute top-1/2 -left-3 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
             />
           </>
+      )}
+
+      {/* Resize Handle - Bottom Right Corner */}
+      {!isDragging && (
+        <div
+          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-[70] opacity-0 group-hover/item:opacity-100 transition-opacity"
+          onMouseDown={(e) => onResizeStart(e, item.id)}
+        >
+          {/* Subtle corner indicator */}
+          <div className="absolute bottom-1 right-1 w-2 h-2 border-r-2 border-b-2 border-gray-400/50 rounded-br-sm" />
+        </div>
       )}
     </div>
   );
@@ -118,6 +133,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
     prev.item === next.item &&
     prev.isSelected === next.isSelected &&
     prev.isDragging === next.isDragging &&
+    prev.isResizing === next.isResizing &&
     prev.dragTilt === next.dragTilt
   );
 });

@@ -42,58 +42,53 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, getSpace
             </div>
         )}
 
-        {/* Stack State */}
+        {/* Stack State - Full size background cards, small square note on top */}
         {!isEmpty && (
             <>
-                {/* We render items in reverse order (bottom up) so DOM layering is correct */}
-                {/* 
-                   linkedItems is [Smallest, Medium, Largest]
-                   reversed is [Largest, Medium, Smallest]
-                   
-                   Iteration 1: Largest (Back)
-                   Iteration 2: Medium
-                   Iteration 3: Smallest (Front)
-                */}
+                {/* Background cards - full size, fanned out */}
                 {[...linkedItems].reverse().map((subItem, revIndex) => {
-                    const index = linkedItems.length - 1 - revIndex; // Restore original index (0 = Smallest/Top)
-                    
-                    // Resting State styles
+                    const index = linkedItems.length - 1 - revIndex;
+                    const isTopCard = index === 0;
+
+                    // Skip top card here - render it separately
+                    if (isTopCard) return null;
+
                     let restingClass = "";
-                    let hoverClass = "";
-                    
-                    if (index === 0) {
-                        // Top Item (Smallest)
-                        restingClass = "rotate-0 scale-100 translate-y-0 z-30";
-                        hoverClass = "group-hover:-translate-y-6 group-hover:scale-105 group-hover:shadow-2xl";
-                    } else if (index === 1) {
-                        // Second Item
-                        restingClass = "-rotate-3 scale-[0.96] translate-y-0 z-20 brightness-95";
-                        hoverClass = "group-hover:-translate-x-14 group-hover:-translate-y-2 group-hover:-rotate-12 group-hover:scale-100 group-hover:brightness-100 group-hover:shadow-xl";
+                    if (index === 1) {
+                        restingClass = "-rotate-6 scale-[0.96] z-20 brightness-95";
                     } else {
-                        // Third Item (Largest)
-                        restingClass = "rotate-3 scale-[0.92] translate-y-0 z-10 brightness-90";
-                        hoverClass = "group-hover:translate-x-14 group-hover:-translate-y-2 group-hover:rotate-12 group-hover:scale-100 group-hover:brightness-100 group-hover:shadow-xl";
+                        restingClass = "rotate-6 scale-[0.92] z-10 brightness-90";
                     }
 
                     return (
-                        <div 
+                        <div
                             key={subItem.id}
-                            className={`
-                                absolute inset-0 bg-white border border-gray-200/80 shadow-md rounded-3xl overflow-hidden 
-                                transition-all duration-500 cubic-bezier(0.19, 1, 0.22, 1) will-change-transform
-                                ${restingClass} ${hoverClass}
-                            `}
+                            className={`absolute inset-0 bg-white shadow-md rounded-3xl overflow-hidden transition-all duration-500 will-change-transform ${restingClass}`}
                         >
                             {renderPreview(subItem)}
-                            
-                            {/* Gloss for depth */}
                             <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent pointer-events-none mix-blend-multiply" />
                         </div>
                     );
                 })}
 
+                {/* Top card - small square note */}
+                {linkedItems[0] && (
+                    <div
+                        className="absolute bg-white shadow-xl rounded-2xl overflow-hidden z-30"
+                        style={{
+                            width: 100,
+                            height: 100,
+                            right: -10,
+                            bottom: -10,
+                            transform: 'rotate(3deg)',
+                        }}
+                    >
+                        {renderPreview(linkedItems[0])}
+                    </div>
+                )}
+
                 {/* Label Badge - Floating below */}
-                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 delay-100 z-40">
+                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-40">
                     <div className="bg-gray-900/80 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-xl">
                         <span className="text-xs font-bold text-white whitespace-nowrap">
                             {item.content}
