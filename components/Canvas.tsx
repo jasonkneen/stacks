@@ -243,8 +243,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }> } | null>(null);
-  const dragUpdatePendingRef = useRef(false);
-  const latestDragDeltaRef = useRef({ x: 0, y: 0 });
+  const lastDragUpdateRef = useRef(0);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number } | null>(null);
   
@@ -576,16 +575,22 @@ export const Canvas: React.FC<CanvasProps> = ({
         const worldDeltaX = totalDeltaX / camera.zoom;
         const worldDeltaY = totalDeltaY / camera.zoom;
 
-        // Update items with absolute positions
-        onUpdateItems(currentItems =>
-            currentItems.map(item => {
-                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
-                if (startPos) {
-                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
-                }
-                return item;
-            })
-        );
+        // Throttle to 60fps (16ms) to reduce re-renders
+        const now = Date.now();
+        if (now - lastDragUpdateRef.current > 16) {
+          lastDragUpdateRef.current = now;
+
+          // Update items with absolute positions
+          onUpdateItems(currentItems =>
+              currentItems.map(item => {
+                  const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+                  if (startPos) {
+                      return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
+                  }
+                  return item;
+              })
+          );
+        }
     } else if (selectionBox) {
         // Lasso Selection Logic
         const currentWorldPos = worldPos;
@@ -668,17 +673,20 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Commit final drag positions
-        const finalDelta = latestDragDeltaRef.current;
+        // Commit final position (in case last throttled update didn't fire)
+        const totalDeltaX = lastMousePos.x - dragStartDataRef.current.mouseX;
+        const totalDeltaY = lastMousePos.y - dragStartDataRef.current.mouseY;
+        const worldDeltaX = totalDeltaX / camera.zoom;
+        const worldDeltaY = totalDeltaY / camera.zoom;
 
         onUpdateItems(currentItems =>
-          currentItems.map(item => {
-            const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
-            if (startPos) {
-              return { ...item, x: startPos.x + finalDelta.x, y: startPos.y + finalDelta.y };
-            }
-            return item;
-          })
+            currentItems.map(item => {
+                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+                if (startPos) {
+                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
+                }
+                return item;
+            })
         );
 
         // Mark dragged items as manually positioned
@@ -693,9 +701,9 @@ export const Canvas: React.FC<CanvasProps> = ({
             // Stack with the hovered item
             onStackItems(draggingId, hoveredItemId);
         } else if (draggedItem) {
-            // Check overlap by position (using final delta)
-            const centerX = draggedItem.x + finalDelta.x + draggedItem.w / 2;
-            const centerY = draggedItem.y + finalDelta.y + draggedItem.h / 2;
+            // Check overlap by position
+            const centerX = draggedItem.x + draggedItem.w / 2;
+            const centerY = draggedItem.y + draggedItem.h / 2;
 
             for (const item of items) {
                 if (item.id === draggingId) continue;
@@ -712,8 +720,6 @@ export const Canvas: React.FC<CanvasProps> = ({
                 }
             }
         }
-
-        latestDragDeltaRef.current = { x: 0, y: 0 };
     }
 
     if (isPanning) {
@@ -904,40 +910,32 @@ export const Canvas: React.FC<CanvasProps> = ({
           </div>
         )}
 
-        {items.map(item => {
-          // Apply live drag offset for items being dragged
-          const isDragged = dragStartDataRef.current?.itemPositions.has(item.id);
-          const visualItem = isDragged
-            ? { ...item, x: item.x + latestDragDeltaRef.current.x, y: item.y + latestDragDeltaRef.current.y }
-            : item;
-
-          return (
-            <ItemRenderer
-              key={item.id}
-              item={visualItem}
-              isSelected={selection.has(item.id)}
-              isDragging={draggingId === item.id}
-              isResizing={resizingId === item.id}
-              dragTilt={draggingId === item.id ? dragTilt : 0}
-              onMouseDown={(e) => handleItemMouseDown(e, item.id)}
-              onResizeStart={handleResizeStart}
-              onNavigate={onNavigate}
-              onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
-              onOpenNote={(item, rect) => onOpenNote(item, rect)}
-              onUpdateContent={(content) => {
-                  // Use functional update to avoid stale closure
-                  onUpdateItems(currentItems =>
-                      currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
-                  );
-              }}
-              onEditFolderName={onEditFolderName}
-              getSpaceItems={getSpaceItems}
-              onHover={setHoveredItemId}
-              onConnectStart={handleConnectStart}
-              onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
-            />
-          );
-        })}
+        {items.map(item => (
+          <ItemRenderer
+            key={item.id}
+            item={item}
+            isSelected={selection.has(item.id)}
+            isDragging={draggingId === item.id}
+            isResizing={resizingId === item.id}
+            dragTilt={draggingId === item.id ? dragTilt : 0}
+            onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+            onResizeStart={handleResizeStart}
+            onNavigate={onNavigate}
+            onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
+            onOpenNote={(item, rect) => onOpenNote(item, rect)}
+            onUpdateContent={(content) => {
+                // Use functional update to avoid stale closure
+                onUpdateItems(currentItems =>
+                    currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
+                );
+            }}
+            onEditFolderName={onEditFolderName}
+            getSpaceItems={getSpaceItems}
+            onHover={setHoveredItemId}
+            onConnectStart={handleConnectStart}
+            onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
+          />
+        ))}
 
         {/* Lasso Selection Box */}
         {selectionBox && (
