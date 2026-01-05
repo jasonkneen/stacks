@@ -1110,7 +1110,14 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
   }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId]);
 
   return (
-    <div className="relative w-full h-full bg-gray-50 overflow-hidden text-gray-900">
+    <div className="relative w-full h-full overflow-hidden text-gray-900" style={{
+      backgroundColor: '#f8f7f4',
+      backgroundImage: `
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, transparent 1px, transparent 2px, rgba(0,0,0,0.015) 3px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.015) 0px, transparent 1px, transparent 2px, rgba(0,0,0,0.015) 3px),
+        repeating-linear-gradient(45deg, transparent 0px, transparent 2px, rgba(0,0,0,0.008) 2px, rgba(0,0,0,0.008) 3px)
+      `
+    }}>
       
       {/* Persistent Navigation (Top Left) - Hidden in overview */}
       {!showOverview && (
@@ -1118,12 +1125,12 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           {activeSpace.parentId && (
             <button
               onClick={handleBack}
-              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100"
+              className="p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60"
             >
-              <ArrowLeft size={20} className="text-gray-700" />
+              <ArrowLeft size={20} className="text-gray-800" />
             </button>
           )}
-          <div className="px-5 py-2.5 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-100 font-semibold text-sm text-gray-700 select-none">
+          <div className="px-5 py-2.5 bg-white/40 backdrop-blur-md rounded-full shadow-lg border border-white/60 font-semibold text-sm text-gray-800 select-none">
             {activeSpace.name}
           </div>
 
@@ -1131,10 +1138,10 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           {topLevelSpaces.length > 1 && (
             <button
               onClick={() => setShowOverview(true)}
-              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100"
+              className="p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60"
               title="Show all spaces (⌘O)"
             >
-              <Menu size={20} className="text-gray-700" />
+              <Menu size={20} className="text-gray-800" />
             </button>
           )}
         </div>
@@ -1500,11 +1507,11 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       {/* Settings Button - Top Right */}
       {!showOverview && (
         <button
-          className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100 z-50"
+          className="absolute top-4 right-4 p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60 z-50"
           onClick={() => setShowSettings(true)}
           title="Settings"
         >
-          <Settings size={20} className="text-gray-700" />
+          <Settings size={20} className="text-gray-800" />
         </button>
       )}
 

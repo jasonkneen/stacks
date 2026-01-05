@@ -96,8 +96,8 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditNa
                         onEditName();
                     }}
                 >
-                    <div className="bg-white backdrop-blur-md border border-gray-200 px-3 py-1 rounded-full shadow-xl hover:bg-gray-50 transition-colors">
-                        <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                    <div className="bg-white/40 backdrop-blur-md border border-white/60 px-3 py-1 rounded-full shadow-xl hover:bg-white/50 transition-colors">
+                        <span className="text-xs font-medium text-gray-800 whitespace-nowrap">
                             {linkedItems.length} items
                         </span>
                     </div>
