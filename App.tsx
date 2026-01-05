@@ -16,7 +16,7 @@ import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 
-// Initial Demo Data
+// Blank canvas on first load
 const ROOT_SPACE_ID = 'root';
 const INITIAL_SPACES: Record<string, Space> = {
   [ROOT_SPACE_ID]: {
@@ -24,100 +24,7 @@ const INITIAL_SPACES: Record<string, Space> = {
     name: 'Scratchpad',
     parentId: null,
     camera: { x: 0, y: 0, zoom: 1 },
-    items: [
-      {
-        id: '1',
-        type: 'note',
-        x: -400,
-        y: -250,
-        w: 320,
-        h: 400,
-        zIndex: 1,
-        rotation: -1.2,
-        content: `<h1>Welcome to Scratchpad</h1><p>An open space for thinking and organizing.</p><ul><li>Drag items to move them</li><li>Double-click folders to enter</li><li>Double-click media to view</li><li>Double-click notes to edit</li><li>Hold Space + drag to pan</li></ul>`,
-      },
-      {
-        id: '2',
-        type: 'sticky',
-        x: 0,
-        y: -200,
-        w: 220,
-        h: 220,
-        zIndex: 2,
-        rotation: 2.5,
-        content: `Don't forget to check the roadmap!`,
-        color: 'bg-yellow-200'
-      },
-      {
-        id: '3',
-        type: 'image',
-        x: -350,
-        y: 200,
-        w: 400,
-        h: 300,
-        zIndex: 3,
-        rotation: -2,
-        content: 'https://picsum.photos/800/600',
-        metadata: { size: '1.2MB', resolution: '800x600' }
-      },
-      {
-        id: '4',
-        type: 'folder',
-        x: 100,
-        y: 100,
-        w: 200,
-        h: 240,
-        zIndex: 4,
-        rotation: 1.5,
-        content: 'Project Alpha',
-        linkedSpaceId: 'project-alpha'
-      },
-       {
-        id: '5',
-        type: 'video',
-        x: 300,
-        y: -250,
-        w: 300,
-        h: 200,
-        zIndex: 5,
-        rotation: -1,
-        content: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        metadata: { duration: '9:56', fps: '24', resolution: '720p', size: '24MB' }
-      }
-    ],
-    connections: []
-  },
-  'project-alpha': {
-    id: 'project-alpha',
-    name: 'Project Alpha',
-    parentId: ROOT_SPACE_ID,
-    camera: { x: 0, y: 0, zoom: 1 },
-    items: [
-      {
-        id: 'pa-1',
-        type: 'sticky',
-        x: -300,
-        y: -150,
-        w: 250,
-        h: 250,
-        zIndex: 1,
-        rotation: 3,
-        content: 'Brainstorming session notes go here.',
-        color: 'bg-green-200'
-      },
-      {
-        id: 'pa-2',
-        type: 'image',
-        x: 50,
-        y: -150,
-        w: 400,
-        h: 300,
-        zIndex: 2,
-        rotation: -2.5,
-        content: 'https://picsum.photos/800/601',
-        metadata: { size: '2.4MB', resolution: '800x600' }
-      }
-    ],
+    items: [],
     connections: []
   }
 };
