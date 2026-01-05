@@ -225,25 +225,33 @@ const App: React.FC = () => {
     const analysis = await analyzeImage(imageUrl);
 
     // Update with results
-    setSpaces(prev => ({
-      ...prev,
-      [targetSpaceId]: {
-        ...prev[targetSpaceId],
-        items: prev[targetSpaceId].items.map(item =>
-          item.id === itemId
-            ? {
-                ...item,
-                metadata: {
-                  ...item.metadata,
-                  description: analysis.description,
-                  colors: analysis.colors,
-                  isAnalyzing: false
-                }
-              }
-            : item
-        )
+    setSpaces(prev => {
+      const itemExists = prev[targetSpaceId]?.items.some(i => i.id === itemId);
+      if (!itemExists) {
+        console.log('[App] Image item was deleted during analysis, skipping update');
+        return prev;
       }
-    }));
+
+      return {
+        ...prev,
+        [targetSpaceId]: {
+          ...prev[targetSpaceId],
+          items: prev[targetSpaceId].items.map(item =>
+            item.id === itemId
+              ? {
+                  ...item,
+                  metadata: {
+                    ...item.metadata,
+                    description: analysis.description,
+                    colors: analysis.colors,
+                    isAnalyzing: false
+                  }
+                }
+              : item
+          )
+        }
+      };
+    });
   }, [activeSpaceId]);
 
   // Update specific item props (e.g. Color)
@@ -632,17 +640,26 @@ const App: React.FC = () => {
           .replace(/^```\s*/m, '')
           .replace(/\s*```$/m, '');
 
-        setSpaces(prev => ({
-          ...prev,
-          [activeSpaceId]: {
-            ...prev[activeSpaceId],
-            items: prev[activeSpaceId].items.map(item =>
-              item.id === newItemId
-                ? { ...item, content: cleanedContent }
-                : item
-            )
+        setSpaces(prev => {
+          // Check if item still exists (may have been deleted during generation)
+          const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+          if (!itemExists) {
+            console.log('[App] AI generation item was deleted, skipping update');
+            return prev; // Don't update if item was deleted
           }
-        }));
+
+          return {
+            ...prev,
+            [activeSpaceId]: {
+              ...prev[activeSpaceId],
+              items: prev[activeSpaceId].items.map(item =>
+                item.id === newItemId
+                  ? { ...item, content: cleanedContent }
+                  : item
+              )
+            }
+          };
+        });
       };
 
       if (hasTools) {
@@ -668,37 +685,53 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       }
 
       // Mark as complete
-      setSpaces(prev => ({
-        ...prev,
-        [activeSpaceId]: {
-          ...prev[activeSpaceId],
-          items: prev[activeSpaceId].items.map(item =>
-            item.id === newItemId
-              ? { ...item, metadata: { ...item.metadata, isGenerating: false, usedTools: hasTools } }
-              : item
-          )
+      setSpaces(prev => {
+        const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+        if (!itemExists) {
+          console.log('[App] AI generation item was deleted, skipping completion update');
+          return prev;
         }
-      }));
+
+        return {
+          ...prev,
+          [activeSpaceId]: {
+            ...prev[activeSpaceId],
+            items: prev[activeSpaceId].items.map(item =>
+              item.id === newItemId
+                ? { ...item, metadata: { ...item.metadata, isGenerating: false, usedTools: hasTools } }
+                : item
+            )
+          }
+        };
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('AI generation failed:', errorMessage, error);
 
       // Update with detailed error message
-      setSpaces(prev => ({
-        ...prev,
-        [activeSpaceId]: {
-          ...prev[activeSpaceId],
-          items: prev[activeSpaceId].items.map(item =>
-            item.id === newItemId
-              ? {
-                  ...item,
-                  content: `<p>AI generation failed: ${errorMessage}</p>`,
-                  metadata: { ...item.metadata, isGenerating: false }
-                }
-              : item
-          )
+      setSpaces(prev => {
+        const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+        if (!itemExists) {
+          console.log('[App] AI generation item was deleted, skipping error update');
+          return prev;
         }
-      }));
+
+        return {
+          ...prev,
+          [activeSpaceId]: {
+            ...prev[activeSpaceId],
+            items: prev[activeSpaceId].items.map(item =>
+              item.id === newItemId
+                ? {
+                    ...item,
+                    content: `<p>AI generation failed: ${errorMessage}</p>`,
+                    metadata: { ...item.metadata, isGenerating: false }
+                  }
+                : item
+            )
+          }
+        };
+      });
     }
   }, [activeSpaceId, activeSpace.items, mcp.connected, mcp.tools, mcp.callTool]);
 

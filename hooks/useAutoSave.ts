@@ -5,19 +5,25 @@ import { saveSpaces } from '../utils/storage';
 export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = true) => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousSpacesRef = useRef<string>('');
+  const renderCountRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
 
+    renderCountRef.current++;
     const currentSpaces = JSON.stringify(spaces);
 
-    // Only save if data has changed
+    // Only save if data has ACTUALLY changed
     if (currentSpaces !== previousSpacesRef.current) {
       const totalItems = Object.values(spaces).reduce((sum, space) => sum + space.items.length, 0);
-      console.log('[useAutoSave] State changed, scheduling save in 500ms:', {
-        totalItems,
-        hasTimeout: !!saveTimeoutRef.current
-      });
+
+      // Log with render count to detect loops
+      if (renderCountRef.current % 5 === 0) {
+        console.log('[useAutoSave] State changed (render #' + renderCountRef.current + '), scheduling save in 500ms:', {
+          totalItems,
+          hasTimeout: !!saveTimeoutRef.current
+        });
+      }
 
       // Clear existing timeout
       if (saveTimeoutRef.current) {
@@ -26,9 +32,10 @@ export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = tr
 
       // Debounce saves (500ms delay)
       saveTimeoutRef.current = setTimeout(() => {
-        console.log('[useAutoSave] Executing save now');
+        console.log('[useAutoSave] Executing save now (render #' + renderCountRef.current + ')');
         saveSpaces(spaces);
         previousSpacesRef.current = currentSpaces;
+        renderCountRef.current = 0; // Reset counter after successful save
       }, 500);
     }
 
