@@ -243,6 +243,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }> } | null>(null);
+  const dragUpdatePendingRef = useRef(false);
+  const latestDragDeltaRef = useRef({ x: 0, y: 0 });
   const [resizingId, setResizingId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number } | null>(null);
   
@@ -562,11 +564,11 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Drag Item Logic - use absolute positions
+        // Drag Item Logic - throttle with RAF for 60fps max
         const targetTilt = deltaX * 0.4;
         setDragTilt(Math.max(Math.min(targetTilt, 12), -12));
 
-        // Calculate total mouse movement from drag start in screen space
+        // Calculate total mouse movement from drag start
         const totalDeltaX = e.clientX - dragStartDataRef.current.mouseX;
         const totalDeltaY = e.clientY - dragStartDataRef.current.mouseY;
 
@@ -574,16 +576,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         const worldDeltaX = totalDeltaX / camera.zoom;
         const worldDeltaY = totalDeltaY / camera.zoom;
 
-        // Use functional update with absolute positions from drag start
-        onUpdateItems(currentItems =>
-            currentItems.map(item => {
-                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
-                if (startPos) {
-                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
-                }
-                return item;
-            })
-        );
+        // Store latest delta but don't update items yet
+        latestDragDeltaRef.current = { x: worldDeltaX, y: worldDeltaY };
     } else if (selectionBox) {
         // Lasso Selection Logic
         const currentWorldPos = worldPos;
@@ -665,7 +659,20 @@ export const Canvas: React.FC<CanvasProps> = ({
         setConnectingLine(null);
     }
 
-    if (draggingId) {
+    if (draggingId && dragStartDataRef.current) {
+        // Commit final drag positions
+        const finalDelta = latestDragDeltaRef.current;
+
+        onUpdateItems(currentItems =>
+          currentItems.map(item => {
+            const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+            if (startPos) {
+              return { ...item, x: startPos.x + finalDelta.x, y: startPos.y + finalDelta.y };
+            }
+            return item;
+          })
+        );
+
         // Mark dragged items as manually positioned
         const draggedIds = selection.has(draggingId)
           ? Array.from(selection).filter(id => items.find(i => i.id === id))
@@ -678,9 +685,9 @@ export const Canvas: React.FC<CanvasProps> = ({
             // Stack with the hovered item
             onStackItems(draggingId, hoveredItemId);
         } else if (draggedItem) {
-            // Check overlap by position
-            const centerX = draggedItem.x + draggedItem.w / 2;
-            const centerY = draggedItem.y + draggedItem.h / 2;
+            // Check overlap by position (using final delta)
+            const centerX = draggedItem.x + finalDelta.x + draggedItem.w / 2;
+            const centerY = draggedItem.y + finalDelta.y + draggedItem.h / 2;
 
             for (const item of items) {
                 if (item.id === draggingId) continue;
@@ -697,6 +704,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                 }
             }
         }
+
+        latestDragDeltaRef.current = { x: 0, y: 0 };
     }
 
     if (isPanning) {
@@ -887,32 +896,40 @@ export const Canvas: React.FC<CanvasProps> = ({
           </div>
         )}
 
-        {items.map(item => (
-          <ItemRenderer
-            key={item.id}
-            item={item}
-            isSelected={selection.has(item.id)}
-            isDragging={draggingId === item.id}
-            isResizing={resizingId === item.id}
-            dragTilt={draggingId === item.id ? dragTilt : 0}
-            onMouseDown={(e) => handleItemMouseDown(e, item.id)}
-            onResizeStart={handleResizeStart}
-            onNavigate={onNavigate}
-            onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
-            onOpenNote={(item, rect) => onOpenNote(item, rect)}
-            onUpdateContent={(content) => {
-                // Use functional update to avoid stale closure
-                onUpdateItems(currentItems =>
-                    currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
-                );
-            }}
-            onEditFolderName={onEditFolderName}
-            getSpaceItems={getSpaceItems}
-            onHover={setHoveredItemId}
-            onConnectStart={handleConnectStart}
-            onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
-          />
-        ))}
+        {items.map(item => {
+          // Apply live drag offset for items being dragged
+          const isDragged = dragStartDataRef.current?.itemPositions.has(item.id);
+          const visualItem = isDragged
+            ? { ...item, x: item.x + latestDragDeltaRef.current.x, y: item.y + latestDragDeltaRef.current.y }
+            : item;
+
+          return (
+            <ItemRenderer
+              key={item.id}
+              item={visualItem}
+              isSelected={selection.has(item.id)}
+              isDragging={draggingId === item.id}
+              isResizing={resizingId === item.id}
+              dragTilt={draggingId === item.id ? dragTilt : 0}
+              onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+              onResizeStart={handleResizeStart}
+              onNavigate={onNavigate}
+              onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
+              onOpenNote={(item, rect) => onOpenNote(item, rect)}
+              onUpdateContent={(content) => {
+                  // Use functional update to avoid stale closure
+                  onUpdateItems(currentItems =>
+                      currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
+                  );
+              }}
+              onEditFolderName={onEditFolderName}
+              getSpaceItems={getSpaceItems}
+              onHover={setHoveredItemId}
+              onConnectStart={handleConnectStart}
+              onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
+            />
+          );
+        })}
 
         {/* Lasso Selection Box */}
         {selectionBox && (

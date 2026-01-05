@@ -18,6 +18,7 @@ import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
+import { PaperTexture } from '@paper-design/shaders-react';
 
 // Blank canvas on first load
 const ROOT_SPACE_ID = 'root';
@@ -142,6 +143,7 @@ const App: React.FC = () => {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [aiPromptState, setAIPromptState] = useState<{ itemId: string; position: { x: number; y: number } } | null>(null);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
   // MCP Client for AI tools
   const mcp = useMCPClient({ autoConnect: true });
@@ -1273,16 +1275,36 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId]);
 
+  // Theme color mapping
+  const themeColors: Record<string, { bg: string; tint: string }> = {
+    light: { bg: '#f8f7f4', tint: '#ffffff' },
+    warm: { bg: '#fff7ed', tint: '#fed7aa' },
+    ocean: { bg: '#eff6ff', tint: '#bfdbfe' },
+    forest: { bg: '#f0fdf4', tint: '#bbf7d0' },
+    sunset: { bg: '#fdf2f8', tint: '#fbcfe8' },
+    dark: { bg: '#1f2937', tint: '#374151' },
+  };
+
+  const currentTheme = themeColors[theme] || themeColors.light;
+
   return (
-    <div className="relative w-full h-full overflow-hidden text-gray-900" style={{
-      backgroundColor: '#f8f7f4',
-      backgroundImage: `
-        repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, transparent 1px, transparent 2px, rgba(0,0,0,0.015) 3px),
-        repeating-linear-gradient(90deg, rgba(0,0,0,0.015) 0px, transparent 1px, transparent 2px, rgba(0,0,0,0.015) 3px),
-        repeating-linear-gradient(45deg, transparent 0px, transparent 2px, rgba(0,0,0,0.008) 2px, rgba(0,0,0,0.008) 3px)
-      `
-    }}>
-      
+    <div className="relative w-full h-full overflow-hidden text-gray-900" style={{ backgroundColor: currentTheme.bg }}>
+      {/* Paper Texture Shader Background */}
+      <div className="absolute inset-0 z-0 opacity-40" style={{ width: '100%', height: '100%' }}>
+        <PaperTexture
+          grainScale={2.0}
+          scaleX={1.0}
+          scaleY={1.0}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </div>
+
+      {/* Theme Tint Overlay */}
+      <div
+        className="absolute inset-0 z-0 mix-blend-overlay opacity-30 pointer-events-none"
+        style={{ backgroundColor: currentTheme.tint }}
+      />
+
       {/* Persistent Navigation (Top Left) - Hidden in overview */}
       {!showOverview && (
         <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
@@ -1707,7 +1729,12 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       )}
 
       {/* Settings Modal */}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onThemeChange={(newTheme) => setTheme(newTheme)}
+        />
+      )}
 
       {/* AI Chat Popup (from connection handles) */}
       {aiPromptState && (

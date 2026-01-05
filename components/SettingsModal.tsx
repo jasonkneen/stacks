@@ -4,18 +4,19 @@ import { useMCPClient } from '../hooks/useMCPClient';
 
 interface Props {
   onClose: () => void;
+  onThemeChange?: (theme: string) => void;
 }
 
 type SettingsTab = 'general' | 'providers' | 'models' | 'display' | 'mcp';
 
-export const SettingsModal: React.FC<Props> = ({ onClose }) => {
+export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [autoSave, setAutoSave] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [autoArrangeNew, setAutoArrangeNew] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState('light');
+  const [selectedTheme, setSelectedTheme] = useState(localStorage.getItem('theme') || 'light');
 
   const [anthropicKey, setAnthropicKey] = useState(localStorage.getItem('anthropic-api-key') || '');
   const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai-api-key') || '');
@@ -339,7 +340,11 @@ export const SettingsModal: React.FC<Props> = ({ onClose }) => {
                     ].map((theme) => (
                       <button
                         key={theme.id}
-                        onClick={() => setSelectedTheme(theme.id)}
+                        onClick={() => {
+                          setSelectedTheme(theme.id);
+                          localStorage.setItem('theme', theme.id);
+                          onThemeChange?.(theme.id);
+                        }}
                         className={`p-4 rounded-xl ${theme.bg} border-2 ${
                           selectedTheme === theme.id ? 'border-gray-900 ring-2 ring-gray-900/20' : theme.border
                         } hover:scale-105 transition-all text-xs font-medium ${
