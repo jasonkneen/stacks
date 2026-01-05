@@ -38,14 +38,14 @@ export const AutoArrangeButton: React.FC<AutoArrangeButtonProps> = ({
   const LayoutIcon = currentLayout?.icon || LayoutGrid;
 
   return (
-    <div className="flex items-center gap-0.5 bg-white/40 backdrop-blur-md rounded-full p-1.5 shadow-lg border border-white/60">
+    <div className="flex items-center gap-0.5 bg-white/40 backdrop-blur-md rounded-full p-1 shadow-lg border border-white/60">
       {/* Execution Button */}
       <button
         onClick={() => {
           onArrange();
           setShowMenu(false);
         }}
-        className="p-2.5 rounded-full bg-gray-800/10 text-gray-800 hover:bg-gray-800/15 transition-all"
+        className="p-2 rounded-full bg-gray-800/10 text-gray-800 hover:bg-gray-800/15 transition-all"
         title={`Auto-arrange ${hasSelection ? 'selected items' : 'all items'} using ${currentLayout?.label} layout`}
       >
         <LayoutIcon size={18} />
@@ -55,7 +55,7 @@ export const AutoArrangeButton: React.FC<AutoArrangeButtonProps> = ({
       <div className="relative">
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="p-2.5 rounded-full text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all"
+          className="p-2 rounded-full text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all"
           title="Arrangement options"
         >
           <ChevronDown size={18} className={`transition-transform ${showMenu ? 'rotate-180' : ''}`} />

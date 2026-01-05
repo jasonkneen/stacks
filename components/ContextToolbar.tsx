@@ -35,7 +35,7 @@ export const ContextToolbar: React.FC<Props> = ({
   const hasSticky = selectedItems.some(i => i.type === 'sticky');
   const singleFolder = selection.size === 1 && selectedItems[0]?.type === 'folder' ? selectedItems[0] : null;
 
-  const btnClass = "p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-95 duration-150 relative";
+  const btnClass = "p-2.5 rounded-2xl text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all active:scale-95 duration-150 relative";
 
   return (
     <div
@@ -45,7 +45,7 @@ export const ContextToolbar: React.FC<Props> = ({
           : 'translate-y-12 opacity-0 scale-95 pointer-events-none'
       }`}
     >
-      <div className="bg-gray-900/95 backdrop-blur-xl p-2 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-1">
+      <div className="bg-white/40 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-white/60 flex items-center gap-1">
 
         {/* Stack/Group (Multiple items) */}
         {selection.size > 1 && (
@@ -73,14 +73,14 @@ export const ContextToolbar: React.FC<Props> = ({
         {hasSticky && (
           <button
             onClick={() => setShowColorPicker(!showColorPicker)}
-            className={`${btnClass} ${showColorPicker ? 'bg-white/10 text-white' : ''}`}
+            className={`${btnClass} ${showColorPicker ? 'bg-gray-800/15 text-gray-900' : ''}`}
             title="Change Color"
           >
             <Droplet size={20} />
 
             {/* Color Picker Dropdown */}
             {showColorPicker && (
-              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-3 flex items-center gap-2">
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200/50 p-3 flex items-center gap-2">
                 {COLORS.map((color) => (
                   <button
                     key={color.class}
@@ -93,7 +93,7 @@ export const ContextToolbar: React.FC<Props> = ({
                       });
                       setShowColorPicker(false);
                     }}
-                    className="w-8 h-8 rounded-lg border-2 border-white/20 transition-all hover:scale-110 active:scale-95 hover:border-white/40"
+                    className="w-8 h-8 rounded-lg border-2 border-gray-300/40 transition-all hover:scale-110 active:scale-95 hover:border-gray-400/60"
                     style={{ backgroundColor: color.hex }}
                     title={color.label}
                   />
@@ -106,7 +106,7 @@ export const ContextToolbar: React.FC<Props> = ({
         {/* Delete */}
         <button
           onClick={() => onDelete(selection)}
-          className={`${btnClass} text-red-400 hover:text-red-300 hover:bg-red-500/20`}
+          className="p-2.5 rounded-2xl text-red-600 hover:text-red-700 hover:bg-red-500/10 transition-all active:scale-95 duration-150"
           title="Delete"
         >
           <Trash2 size={20} />
