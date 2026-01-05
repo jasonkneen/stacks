@@ -60,13 +60,13 @@ export const getLanguageModel = (config: ProviderConfig): LanguageModel => {
 
   switch (config.provider) {
     case 'anthropic':
-      return anthropic(config.model || 'claude-sonnet-4-5-20250929');
+      return anthropic(config.model || 'claude-sonnet-4-5-20250929', { apiKey });
 
     case 'openai':
-      return openai(config.model || 'gpt-4o');
+      return openai(config.model || 'gpt-4o', { apiKey });
 
     case 'google':
-      return google(config.model || 'gemini-2.0-flash-exp');
+      return google(config.model || 'gemini-2.0-flash-exp', { apiKey });
 
     default:
       throw new Error(`Unknown provider: ${config.provider}`);

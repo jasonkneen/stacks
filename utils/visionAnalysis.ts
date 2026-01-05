@@ -71,13 +71,13 @@ export const analyzeImageWithVision = async (
   let model;
   switch (provider) {
     case 'anthropic':
-      model = anthropic(options?.model || 'claude-sonnet-4-5-20250929');
+      model = anthropic(options?.model || 'claude-sonnet-4-5-20250929', { apiKey });
       break;
     case 'openai':
-      model = openai(options?.model || 'gpt-4o');
+      model = openai(options?.model || 'gpt-4o', { apiKey });
       break;
     case 'google':
-      model = google(options?.model || 'gemini-2.0-flash-exp');
+      model = google(options?.model || 'gemini-2.0-flash-exp', { apiKey });
       break;
     default:
       throw new Error(`Unknown provider: ${provider}`);
