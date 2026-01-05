@@ -641,7 +641,8 @@ const App: React.FC = () => {
   const handleAIGeneration = useCallback(async (
     sourceItemId: string | string[],
     prompt: string,
-    options?: AIOptions
+    options?: AIOptions,
+    existingItemId?: string
   ) => {
     // Get source items (single or multiple)
     const sourceIds = Array.isArray(sourceItemId) ? sourceItemId : [sourceItemId];
@@ -651,8 +652,8 @@ const App: React.FC = () => {
     // Use first item as primary for positioning
     const sourceItem = sourceItems[0];
 
-    // Create placeholder note
-    const newItemId = `ai-${Date.now()}`;
+    // Use existing item or create new placeholder
+    const newItemId = existingItemId || `ai-${Date.now()}`;
     const newItem: SpatialItem = {
       id: newItemId,
       type: 'note',
@@ -663,25 +664,38 @@ const App: React.FC = () => {
       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
       rotation: (Math.random() - 0.5) * 4,
       content: '<p>Generating...</p>',
-      metadata: { isGenerating: true, prompt }
+      metadata: {
+        isGenerating: true,
+        prompt,
+        imageResolution: options?.imageResolution,
+        imageStyle: options?.imageStyle
+      }
     };
 
-    // Add item and connection
-    setSpaces(prev => ({
-      ...prev,
-      [activeSpaceId]: {
-        ...prev[activeSpaceId],
-        items: [...prev[activeSpaceId].items, newItem],
-        connections: [
-          ...(prev[activeSpaceId].connections || []),
-          {
-            id: `conn-${Date.now()}`,
-            from: sourceItemId,
-            to: newItemId
-          }
-        ]
-      }
-    }));
+    // Add new item or update existing item
+    setSpaces(prev => {
+      const existingItem = prev[activeSpaceId].items.find(i => i.id === newItemId);
+
+      return {
+        ...prev,
+        [activeSpaceId]: {
+          ...prev[activeSpaceId],
+          items: existingItem
+            ? prev[activeSpaceId].items.map(i => i.id === newItemId ? { ...i, ...newItem } : i)
+            : [...prev[activeSpaceId].items, newItem],
+          connections: existingItem
+            ? prev[activeSpaceId].connections
+            : [
+                ...(prev[activeSpaceId].connections || []),
+                {
+                  id: `conn-${Date.now()}`,
+                  from: sourceItemId,
+                  to: newItemId
+                }
+              ]
+        }
+      };
+    });
 
     try {
       // Use AI provider with MCP tools when available
@@ -1526,6 +1540,26 @@ const App: React.FC = () => {
           onAIChat={(ids, position) => {
             setAIPromptState({ itemIds: ids, position, mode: 'selection' });
           }}
+          onRegenerate={(ids) => {
+            // Re-run the original prompt for selected items
+            ids.forEach(id => {
+              const item = activeSpace.items.find(i => i.id === id);
+              if (item?.metadata?.prompt) {
+                console.log('[App] Regenerating item:', id, 'with prompt:', item.metadata.prompt);
+
+                // Find the original source item (from connections)
+                const sourceConn = activeSpace.connections?.find(c => c.to === id);
+                const sourceId = sourceConn?.from || id;
+
+                // Re-run with stored options or defaults, passing existingItemId to update instead of create
+                handleAIGeneration(sourceId, item.metadata.prompt, {
+                  outputType: item.type === 'image' ? 'image' : item.type === 'sticky' ? 'sticky' : 'note',
+                  imageResolution: item.metadata.imageResolution as any,
+                  imageStyle: item.metadata.imageStyle as any
+                }, id);
+              }
+            });
+          }}
           layoutType={activeSpace.layoutType || 'grid'}
           sortBy={activeSpace.sortBy || 'updated'}
         />
@@ -1805,6 +1839,12 @@ const App: React.FC = () => {
               placeholder={`Ask AI about: ${previewText}...`}
               initialExpanded={false}
               onSubmit={(prompt, options) => {
+                // If all selected items are images and output type is auto, default to image mode
+                const allImages = selectedItems.every(i => i.type === 'image');
+                if (allImages && options?.outputType === 'auto') {
+                  console.log('[App] All selected items are images, forcing image mode');
+                  options = { ...options, outputType: 'image' };
+                }
                 handleAIGeneration(Array.from(aiPromptState.itemIds!), prompt, options);
                 setAIPromptState(null);
               }}
@@ -1827,6 +1867,11 @@ const App: React.FC = () => {
             initialExpanded={false}
             onSubmit={(prompt, options) => {
               if (aiPromptState.itemId) {
+                // If source is an image and output type is auto, default to image mode
+                if (sourceItem?.type === 'image' && options?.outputType === 'auto') {
+                  console.log('[App] Source is image, forcing image mode');
+                  options = { ...options, outputType: 'image' };
+                }
                 handleAIGeneration(aiPromptState.itemId, prompt, options);
               }
               setAIPromptState(null);

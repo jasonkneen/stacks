@@ -193,7 +193,11 @@ export const AIChat: React.FC<Props> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    if (!prompt.trim()) {
+      console.log('[AIChat] Empty prompt, not submitting');
+      return;
+    }
+    console.log('[AIChat] Submitting:', { prompt, options, detectedType });
     onSubmit(prompt, { ...options, outputType: detectedType !== 'auto' ? detectedType : options.outputType });
   };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, FolderPlus, FolderOpen, Layers, LayoutGrid, Droplet, Sparkles } from 'lucide-react';
+import { Trash2, FolderPlus, FolderOpen, Layers, LayoutGrid, Droplet, Sparkles, RefreshCw } from 'lucide-react';
 import { SpatialItem, LayoutType, SortOption } from '../types';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   onUngroup: (folderId: string) => void;
   onArrangeSelection: (layoutType: LayoutType, sortBy: SortOption) => void;
   onAIChat: (ids: Set<string>, position: { x: number; y: number }) => void;
+  onRegenerate: (ids: Set<string>) => void;
   layoutType: LayoutType;
   sortBy: SortOption;
 }
@@ -33,6 +34,7 @@ export const ContextToolbar: React.FC<Props> = ({
   onUngroup,
   onArrangeSelection,
   onAIChat,
+  onRegenerate,
   layoutType,
   sortBy
 }) => {
@@ -42,6 +44,7 @@ export const ContextToolbar: React.FC<Props> = ({
   const selectedItems = items.filter(i => selection.has(i.id));
   const hasSticky = selectedItems.some(i => i.type === 'sticky');
   const singleFolder = selection.size === 1 && selectedItems[0]?.type === 'folder' ? selectedItems[0] : null;
+  const hasPrompt = selectedItems.some(i => i.metadata?.prompt);
 
   const btnClass = "p-2.5 rounded-2xl text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all active:scale-95 duration-150 relative";
 
@@ -119,6 +122,17 @@ export const ContextToolbar: React.FC<Props> = ({
         >
           <LayoutGrid size={20} />
         </button>
+
+        {/* Regenerate (AI-generated items only) */}
+        {hasPrompt && (
+          <button
+            onClick={() => onRegenerate(selection)}
+            className="p-2.5 rounded-2xl text-green-600 hover:text-green-700 hover:bg-green-500/10 transition-all active:scale-95 duration-150"
+            title="Regenerate with original prompt"
+          >
+            <RefreshCw size={20} />
+          </button>
+        )}
 
         {/* AI Chat */}
         <button

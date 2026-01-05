@@ -1,10 +1,12 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef, useCallback } from 'react';
 import { SpatialItem } from '../types';
 import { StickyComponent } from './StickyComponent';
 import { NoteComponent } from './NoteComponent';
 import { MediaComponent } from './MediaComponent';
 import { FolderComponent } from './FolderComponent';
 import { Plus } from 'lucide-react';
+
+type HandlePosition = 'top' | 'right' | 'bottom' | 'left';
 
 interface ItemRendererProps {
   item: SpatialItem;
@@ -43,7 +45,40 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onConnectStart,
   onAIPromptStart
 }) => {
-  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
+  const [activeHandle, setActiveHandle] = useState<HandlePosition>('right');
+  const [isHovered, setIsHovered] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Calculate which handle is closest to cursor position
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Calculate relative position from center
+    const relX = e.clientX - centerX;
+    const relY = e.clientY - centerY;
+
+    // Determine which edge is closest based on position
+    // Use angle to determine quadrant
+    const angle = Math.atan2(relY, relX) * (180 / Math.PI);
+
+    // Angle ranges: right (-45 to 45), bottom (45 to 135), left (135 to 180 or -180 to -135), top (-135 to -45)
+    let newHandle: HandlePosition = 'right';
+    if (angle >= -45 && angle < 45) {
+      newHandle = 'right';
+    } else if (angle >= 45 && angle < 135) {
+      newHandle = 'bottom';
+    } else if (angle >= 135 || angle < -135) {
+      newHandle = 'left';
+    } else if (angle >= -135 && angle < -45) {
+      newHandle = 'top';
+    }
+
+    setActiveHandle(newHandle);
+  }, []);
   
   // Dynamic Transition: NONE during drag/resize to prevent lag
   const isInteracting = isDragging || isResizing;
@@ -97,26 +132,38 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
 
   return (
     <div
+      ref={containerRef}
       className={`${commonClasses} rounded-3xl select-none`}
       style={{...style, background: 'transparent', overflow: 'visible'}}
       onMouseDown={onMouseDown}
-      onMouseEnter={() => onHover(item.id)}
-      onMouseLeave={() => onHover(null)}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        setActiveHandle('right'); // Always default to right
+        onHover(item.id);
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setActiveHandle('right'); // Reset to right on leave
+        onHover(null);
+      }}
+      onMouseMove={handleMouseMove}
     >
       <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : 'overflow-hidden bg-white border border-gray-100'}`}>
           {renderContent()}
       </div>
 
-      {/* Connection Handles (Visible on Group Hover) */}
-      {!isDragging && !isResizing && onConnectStart && (
+      {/* Connection Handle - Drag to connect, Click for AI prompt */}
+      {!isDragging && !isResizing && onConnectStart && isHovered && (
           <>
             {/* Top */}
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-[60]">
+            <div
+              className={`absolute -top-3 left-1/2 -translate-x-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'top' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
               <div
-                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  // Track start position to detect drag vs click
+                  e.stopPropagation();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
                   onConnectStart(e, item.id);
                 }}
@@ -124,7 +171,6 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
                   const startPos = (e.currentTarget as any)._mouseDownPos;
                   if (startPos) {
                     const dist = Math.sqrt(Math.pow(e.clientX - startPos.x, 2) + Math.pow(e.clientY - startPos.y, 2));
-                    // If moved less than 5px, treat as click
                     if (dist < 5) {
                       e.stopPropagation();
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -139,11 +185,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             </div>
 
             {/* Right */}
-            <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-[60]">
+            <div
+              className={`absolute top-1/2 -right-3 -translate-y-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'right' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
               <div
-                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
                   onConnectStart(e, item.id);
                 }}
@@ -165,11 +214,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             </div>
 
             {/* Bottom */}
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60]">
+            <div
+              className={`absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'bottom' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
               <div
-                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
                   onConnectStart(e, item.id);
                 }}
@@ -191,11 +243,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             </div>
 
             {/* Left */}
-            <div className="absolute top-1/2 -left-3 -translate-y-1/2 z-[60]">
+            <div
+              className={`absolute top-1/2 -left-3 -translate-y-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'left' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
               <div
-                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
                   onConnectStart(e, item.id);
                 }}
