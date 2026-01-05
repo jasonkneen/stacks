@@ -64,7 +64,7 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditNa
                     return (
                         <div
                             key={subItem.id}
-                            className={`absolute inset-0 bg-white shadow-md rounded-3xl overflow-hidden transition-all duration-500 will-change-transform ${restingClass}`}
+                            className={`absolute inset-0 shadow-md rounded-3xl overflow-hidden transition-all duration-500 will-change-transform ${restingClass}`}
                         >
                             {renderPreview(subItem)}
                             <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent pointer-events-none mix-blend-multiply" />
@@ -75,7 +75,7 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditNa
                 {/* Top card - small square note */}
                 {linkedItems[0] && (
                     <div
-                        className="absolute bg-white shadow-xl rounded-2xl overflow-hidden z-30"
+                        className="absolute shadow-xl rounded-2xl overflow-hidden z-30"
                         style={{
                             width: 100,
                             height: 100,
@@ -132,7 +132,7 @@ const renderPreview = (item: SpatialItem) => {
             );
         case 'note':
             return (
-                <div className="w-full h-full bg-white p-5 flex flex-col gap-3">
+                <div className="w-full h-full bg-white/90 backdrop-blur-sm p-5 flex flex-col gap-3">
                     <div className="w-3/4 h-2.5 bg-gray-800 rounded-sm opacity-10" />
                     <div className="space-y-1.5 mt-1">
                         <div className="w-full h-1.5 bg-gray-400 rounded-sm opacity-20" />
@@ -143,11 +143,11 @@ const renderPreview = (item: SpatialItem) => {
             );
         case 'folder':
              return (
-                 <div className="w-full h-full bg-blue-50 flex items-center justify-center">
-                     <FolderIcon size={40} className="text-blue-200" />
+                 <div className="w-full h-full bg-blue-100/30 backdrop-blur-sm flex items-center justify-center">
+                     <FolderIcon size={40} className="text-blue-300" />
                  </div>
              );
         default:
-            return <div className="w-full h-full bg-gray-50" />;
+            return <div className="w-full h-full bg-gray-100/30 backdrop-blur-sm" />;
     }
 };
