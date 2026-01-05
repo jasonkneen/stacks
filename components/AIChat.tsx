@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Loader2 } from 'lucide-react';
+import { Send, Sparkles } from 'lucide-react';
 
 export type AIResponseFormat = 'text' | 'sticky' | 'note' | 'image' | 'document';
 
@@ -17,9 +17,8 @@ interface Props {
   position: { x: number; y: number };
   placeholder?: string;
   contextPrompt?: string;
-  onSubmit: (prompt: string, response: AIResponse) => void;
+  onSubmit: (prompt: string) => void;
   onClose: () => void;
-  onGenerate?: (prompt: string) => Promise<AIResponse>;
 }
 
 // System prompt for the AI to understand output formats
@@ -118,13 +117,10 @@ export const parseAIResponse = (rawResponse: string): AIResponse[] => {
 export const AIChat: React.FC<Props> = ({
   position,
   placeholder = "Ask AI...",
-  contextPrompt,
   onSubmit,
-  onClose,
-  onGenerate
+  onClose
 }) => {
   const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -133,37 +129,16 @@ export const AIChat: React.FC<Props> = ({
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isGenerating) onClose();
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose, isGenerating]);
+  }, [onClose]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim() || isGenerating) return;
-
-    setIsGenerating(true);
-
-    try {
-      if (onGenerate) {
-        // Use provided generate function
-        const response = await onGenerate(prompt);
-        onSubmit(prompt, response);
-      } else {
-        // Mock response for testing
-        const mockResponse = `[NOTE:AI Response]\n<p>${prompt}</p>\n[/NOTE]`;
-        const parsed = parseAIResponse(mockResponse);
-        if (parsed.length > 0) {
-          onSubmit(prompt, parsed[0]);
-        }
-      }
-    } catch (error) {
-      console.error('AI generation failed:', error);
-    } finally {
-      setIsGenerating(false);
-      setPrompt('');
-    }
+    if (!prompt.trim()) return;
+    onSubmit(prompt);
   };
 
   return (
@@ -171,7 +146,7 @@ export const AIChat: React.FC<Props> = ({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-[150]"
-        onClick={() => !isGenerating && onClose()}
+        onClick={onClose}
       />
 
       {/* Popup */}
@@ -193,27 +168,15 @@ export const AIChat: React.FC<Props> = ({
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={placeholder}
               className="flex-1 bg-transparent text-gray-800 placeholder-gray-500 outline-none text-sm"
-              disabled={isGenerating}
             />
             <button
               type="submit"
-              disabled={!prompt.trim() || isGenerating}
+              disabled={!prompt.trim()}
               className="p-2 rounded-full bg-gray-800/10 hover:bg-gray-800/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              {isGenerating ? (
-                <Loader2 size={18} className="text-gray-800 animate-spin" />
-              ) : (
-                <Send size={18} className="text-gray-800" />
-              )}
+              <Send size={18} className="text-gray-800" />
             </button>
           </div>
-
-          {isGenerating && (
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-gray-600 text-xs flex items-center gap-2 bg-white/40 backdrop-blur-md px-3 py-1 rounded-full">
-              <Loader2 size={12} className="animate-spin" />
-              Generating...
-            </div>
-          )}
         </form>
       </div>
     </>

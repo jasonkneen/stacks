@@ -243,7 +243,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }> } | null>(null);
-  const lastDragUpdateRef = useRef(0);
+  const currentDragOffsetRef = useRef({ x: 0, y: 0 }); // Current offset
+  const [dragOffsetTrigger, setDragOffsetTrigger] = useState(0); // Trigger re-render
   const [resizingId, setResizingId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number } | null>(null);
   
@@ -575,22 +576,9 @@ export const Canvas: React.FC<CanvasProps> = ({
         const worldDeltaX = totalDeltaX / camera.zoom;
         const worldDeltaY = totalDeltaY / camera.zoom;
 
-        // Throttle to 60fps (16ms) to reduce re-renders
-        const now = Date.now();
-        if (now - lastDragUpdateRef.current > 16) {
-          lastDragUpdateRef.current = now;
-
-          // Update items with absolute positions
-          onUpdateItems(currentItems =>
-              currentItems.map(item => {
-                  const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
-                  if (startPos) {
-                      return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
-                  }
-                  return item;
-              })
-          );
-        }
+        // Store offset in ref and trigger render
+        currentDragOffsetRef.current = { x: worldDeltaX, y: worldDeltaY };
+        setDragOffsetTrigger(prev => prev + 1); // Force re-render for visual update
     } else if (selectionBox) {
         // Lasso Selection Logic
         const currentWorldPos = worldPos;
@@ -673,17 +661,15 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Commit final position (in case last throttled update didn't fire)
-        const totalDeltaX = lastMousePos.x - dragStartDataRef.current.mouseX;
-        const totalDeltaY = lastMousePos.y - dragStartDataRef.current.mouseY;
-        const worldDeltaX = totalDeltaX / camera.zoom;
-        const worldDeltaY = totalDeltaY / camera.zoom;
+        // Capture values BEFORE clearing refs (closures would see null otherwise)
+        const finalOffset = { ...currentDragOffsetRef.current };
+        const itemPositions = new Map(dragStartDataRef.current.itemPositions);
 
         onUpdateItems(currentItems =>
             currentItems.map(item => {
-                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+                const startPos = itemPositions.get(item.id);
                 if (startPos) {
-                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
+                    return { ...item, x: startPos.x + finalOffset.x, y: startPos.y + finalOffset.y };
                 }
                 return item;
             })
@@ -728,6 +714,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     setIsPanning(false);
     setDraggingId(null);
     dragStartDataRef.current = null;
+    currentDragOffsetRef.current = { x: 0, y: 0 };
     setDragTilt(0);
     setSelectionBox(null);
   }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia]); 
@@ -801,9 +788,21 @@ export const Canvas: React.FC<CanvasProps> = ({
                 </marker>
             </defs>
             {connections.map(conn => {
-                const fromItem = items.find(i => i.id === conn.from);
-                const toItem = items.find(i => i.id === conn.to);
-                if (!fromItem || !toItem) return null;
+                const fromItemRaw = items.find(i => i.id === conn.from);
+                const toItemRaw = items.find(i => i.id === conn.to);
+                if (!fromItemRaw || !toItemRaw) return null;
+
+                // Apply visual offset ONLY while actively dragging
+                const offset = currentDragOffsetRef.current;
+                const fromIsDragged = draggingId && dragStartDataRef.current?.itemPositions.has(fromItemRaw.id);
+                const toIsDragged = draggingId && dragStartDataRef.current?.itemPositions.has(toItemRaw.id);
+
+                const fromItem = fromIsDragged
+                  ? { ...fromItemRaw, x: fromItemRaw.x + offset.x, y: fromItemRaw.y + offset.y }
+                  : fromItemRaw;
+                const toItem = toIsDragged
+                  ? { ...toItemRaw, x: toItemRaw.x + offset.x, y: toItemRaw.y + offset.y }
+                  : toItemRaw;
 
                 // Calculate nearest edge points (handle to handle)
                 const fromCenterX = fromItem.x + fromItem.w / 2;
@@ -910,32 +909,40 @@ export const Canvas: React.FC<CanvasProps> = ({
           </div>
         )}
 
-        {items.map(item => (
-          <ItemRenderer
-            key={item.id}
-            item={item}
-            isSelected={selection.has(item.id)}
-            isDragging={draggingId === item.id}
-            isResizing={resizingId === item.id}
-            dragTilt={draggingId === item.id ? dragTilt : 0}
-            onMouseDown={(e) => handleItemMouseDown(e, item.id)}
-            onResizeStart={handleResizeStart}
-            onNavigate={onNavigate}
-            onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
-            onOpenNote={(item, rect) => onOpenNote(item, rect)}
-            onUpdateContent={(content) => {
-                // Use functional update to avoid stale closure
-                onUpdateItems(currentItems =>
-                    currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
-                );
-            }}
-            onEditFolderName={onEditFolderName}
-            getSpaceItems={getSpaceItems}
-            onHover={setHoveredItemId}
-            onConnectStart={handleConnectStart}
-            onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
-          />
-        ))}
+        {items.map(item => {
+          // Apply visual offset ONLY while actively dragging (draggingId is set)
+          // Once mouseUp fires, draggingId becomes null - use committed positions
+          const isDragged = draggingId && dragStartDataRef.current?.itemPositions.has(item.id);
+          const offset = currentDragOffsetRef.current;
+          const visualItem = isDragged ? { ...item, x: item.x + offset.x, y: item.y + offset.y } : item;
+
+          return (
+            <ItemRenderer
+              key={item.id}
+              item={visualItem}
+              isSelected={selection.has(item.id)}
+              isDragging={draggingId === item.id}
+              isResizing={resizingId === item.id}
+              dragTilt={draggingId === item.id ? dragTilt : 0}
+              onMouseDown={(e) => handleItemMouseDown(e, item.id)}
+              onResizeStart={handleResizeStart}
+              onNavigate={onNavigate}
+              onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
+              onOpenNote={(item, rect) => onOpenNote(item, rect)}
+              onUpdateContent={(content) => {
+                  // Use functional update to avoid stale closure
+                  onUpdateItems(currentItems =>
+                      currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
+                  );
+              }}
+              onEditFolderName={onEditFolderName}
+              getSpaceItems={getSpaceItems}
+              onHover={setHoveredItemId}
+              onConnectStart={handleConnectStart}
+              onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
+            />
+          );
+        })}
 
         {/* Lasso Selection Box */}
         {selectionBox && (

@@ -1438,12 +1438,14 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
               onDeleteConnection={handleDeleteConnection}
               onDropFiles={handleDropFiles}
               onMarkManuallyPositioned={(ids) => {
-                const updatedItems = activeSpace.items.map(item =>
-                  ids.includes(item.id)
-                    ? { ...item, metadata: { ...item.metadata, manuallyPositioned: true } }
-                    : item
+                // CRITICAL: Use functional update to avoid stale closure overwriting drag positions
+                updateItems(currentItems =>
+                  currentItems.map(item =>
+                    ids.includes(item.id)
+                      ? { ...item, metadata: { ...item.metadata, manuallyPositioned: true } }
+                      : item
+                  )
                 );
-                updateItems(updatedItems);
               }}
               onAIPromptStart={(itemId, position) => {
                 setAIPromptState({ itemId, position });
@@ -1737,17 +1739,25 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       )}
 
       {/* AI Chat Popup (from connection handles) */}
-      {aiPromptState && (
-        <AIChat
-          position={aiPromptState.position}
-          placeholder="Expand on this and create ideas..."
-          onSubmit={(prompt, response) => {
-            handleAIGeneration(aiPromptState.itemId, prompt);
-            setAIPromptState(null);
-          }}
-          onClose={() => setAIPromptState(null)}
-        />
-      )}
+      {aiPromptState && (() => {
+        const sourceItem = activeSpace.items.find(i => i.id === aiPromptState.itemId);
+        const sourcePreview = sourceItem
+          ? (sourceItem.type === 'image' || sourceItem.type === 'video'
+              ? `${sourceItem.type}: ${sourceItem.metadata?.description || 'visual content'}`
+              : sourceItem.content.replace(/<[^>]*>/g, '').slice(0, 50) + (sourceItem.content.length > 50 ? '...' : ''))
+          : '';
+        return (
+          <AIChat
+            position={aiPromptState.position}
+            placeholder={`Ask AI about: ${sourcePreview || 'this item'}...`}
+            onSubmit={(prompt) => {
+              handleAIGeneration(aiPromptState.itemId, prompt);
+              setAIPromptState(null);
+            }}
+            onClose={() => setAIPromptState(null)}
+          />
+        );
+      })()}
 
       {/* AI Modal */}
       {showAIModal && (
