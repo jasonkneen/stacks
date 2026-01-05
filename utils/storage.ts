@@ -24,16 +24,36 @@ export const loadMedia = (pointer: string): string | null => {
   return pointer; // Already a data URL or external URL
 };
 
-// Save all spaces to localStorage
+// Save all spaces to localStorage (excluding large image/video data)
 export const saveSpaces = (spaces: Record<string, Space>) => {
   try {
+    // Strip out image/video content (data URLs) to save space
+    const spacesToSave = Object.fromEntries(
+      Object.entries(spaces).map(([id, space]) => [
+        id,
+        {
+          ...space,
+          items: space.items.map(item => {
+            // For images/videos, don't save the content (data URL)
+            if (item.type === 'image' || item.type === 'video') {
+              return {
+                ...item,
+                content: '' // Clear data URL
+              };
+            }
+            return item;
+          })
+        }
+      ])
+    );
+
     const totalItems = Object.values(spaces).reduce((sum, space) => sum + space.items.length, 0);
-    console.log('[storage] Saving spaces:', {
+    console.log('[storage] Saving spaces (images excluded):', {
       spaceCount: Object.keys(spaces).length,
       totalItems,
       timestamp: new Date().toISOString()
     });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(spaces));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(spacesToSave));
   } catch (e) {
     console.error('Failed to save spaces:', e);
   }
