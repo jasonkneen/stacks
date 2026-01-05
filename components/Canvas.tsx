@@ -252,6 +252,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [selectionBox, setSelectionBox] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+  const selectionBoxRef = useRef<{ x: number, y: number, w: number, h: number } | null>(null);
+  const [selectionBoxTrigger, setSelectionBoxTrigger] = useState(0);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 }); // Screen coords for delta calc
 
   // Connection State
@@ -417,7 +419,9 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
             const worldPos = screenToWorld(e.clientX, e.clientY);
             // Initialize 0-size box at click location
-            setSelectionBox({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
+            const initialBox = { x: worldPos.x, y: worldPos.y, w: 0, h: 0 };
+            selectionBoxRef.current = initialBox;
+            setSelectionBox(initialBox);
             setDragStartPos({ x: e.clientX, y: e.clientY });
         }
     }
@@ -580,7 +584,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         currentDragOffsetRef.current = { x: worldDeltaX, y: worldDeltaY };
         setDragOffsetTrigger(prev => prev + 1); // Force re-render for visual update
     } else if (selectionBox) {
-        // Lasso Selection Logic
+        // Lasso Selection Logic - use ref for visual, defer selection calc to mouseUp
         const currentWorldPos = worldPos;
         const startWorldPos = screenToWorld(dragStartPos.x, dragStartPos.y);
 
@@ -590,26 +594,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             w: Math.abs(currentWorldPos.x - startWorldPos.x),
             h: Math.abs(currentWorldPos.y - startWorldPos.y)
         };
-        
-        setSelectionBox(newBox);
 
-        // Calculate intersections
-        const newSelection = new Set<string>();
-        
-        items.forEach(item => {
-            // Simple AABB intersection
-            const isIntersecting = 
-                item.x < newBox.x + newBox.w &&
-                item.x + item.w > newBox.x &&
-                item.y < newBox.y + newBox.h &&
-                item.y + item.h > newBox.y;
-            
-            if (isIntersecting) {
-                newSelection.add(item.id);
-            }
-        });
-
-        onSelectionChange(newSelection);
+        // Store in ref and trigger lightweight re-render
+        selectionBoxRef.current = newBox;
+        setSelectionBoxTrigger(prev => prev + 1);
     }
   }, [isPanning, draggingId, resizingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
@@ -695,6 +683,26 @@ export const Canvas: React.FC<CanvasProps> = ({
         // Users can manually drag onto folders to stack
     }
 
+    // Calculate final selection from lasso box
+    if (selectionBox && selectionBoxRef.current) {
+        const box = selectionBoxRef.current;
+        const newSelection = new Set<string>();
+
+        items.forEach(item => {
+            const isIntersecting =
+                item.x < box.x + box.w &&
+                item.x + item.w > box.x &&
+                item.y < box.y + box.h &&
+                item.y + item.h > box.y;
+
+            if (isIntersecting) {
+                newSelection.add(item.id);
+            }
+        });
+
+        onSelectionChange(newSelection);
+    }
+
     if (isPanning) {
         startInertia();
     }
@@ -702,9 +710,10 @@ export const Canvas: React.FC<CanvasProps> = ({
     setDraggingId(null);
     dragStartDataRef.current = null;
     currentDragOffsetRef.current = { x: 0, y: 0 };
+    selectionBoxRef.current = null;
     setDragTilt(0);
     setSelectionBox(null);
-  }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia]); 
+  }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia, selectionBox, onSelectionChange]); 
 
   useEffect(() => {
     if (isPanning || draggingId || resizingId || selectionBox || connectingLine) {
@@ -931,15 +940,15 @@ export const Canvas: React.FC<CanvasProps> = ({
           );
         })}
 
-        {/* Lasso Selection Box */}
-        {selectionBox && (
-            <div 
+        {/* Lasso Selection Box - uses ref for smooth visual during drag */}
+        {selectionBox && selectionBoxRef.current && (
+            <div
                 className="absolute border-2 border-blue-500 bg-blue-500/10 rounded-lg pointer-events-none z-[9999]"
                 style={{
-                    left: selectionBox.x,
-                    top: selectionBox.y,
-                    width: selectionBox.w,
-                    height: selectionBox.h,
+                    left: selectionBoxRef.current.x,
+                    top: selectionBoxRef.current.y,
+                    width: selectionBoxRef.current.w,
+                    height: selectionBoxRef.current.h,
                 }}
             />
         )}
