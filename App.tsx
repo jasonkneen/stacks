@@ -66,10 +66,37 @@ const getFitToViewParams = (items: SpatialItem[]) => {
 
 const App: React.FC = () => {
   // Load from localStorage or use initial data
-  const [spaces, setSpaces] = useState<Record<string, Space>>(() => {
-    const saved = loadSpaces();
-    return saved || INITIAL_SPACES;
-  });
+  const [spaces, setSpaces] = useState<Record<string, Space>>(INITIAL_SPACES);
+  const [isLoadingSpaces, setIsLoadingSpaces] = useState(true);
+
+  // Load saved spaces asynchronously on mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // Check if localStorage is corrupted
+        const testKey = 'scratchpad-test';
+        try {
+          localStorage.setItem(testKey, 'test');
+          localStorage.removeItem(testKey);
+        } catch (e) {
+          // localStorage full - clear it
+          console.warn('[App] localStorage full, clearing old data...');
+          localStorage.clear();
+        }
+
+        const saved = await loadSpaces();
+        if (saved) {
+          setSpaces(saved);
+        }
+      } catch (error) {
+        console.error('[App] Failed to load spaces:', error);
+      } finally {
+        setIsLoadingSpaces(false);
+      }
+    };
+
+    init();
+  }, []);
 
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
 
