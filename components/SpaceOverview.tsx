@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Space, SpatialItem } from '../types';
 import { Plus } from 'lucide-react';
 
@@ -10,6 +10,19 @@ interface Props {
 }
 
 export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelectSpace, onCreateSpace }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeCardRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to active space
+  useEffect(() => {
+    if (activeCardRef.current && containerRef.current) {
+      activeCardRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [activeSpaceId]);
   // Render a mini preview of items in a space
   const renderSpacePreview = (space: Space) => {
     if (space.items.length === 0) {
@@ -60,11 +73,16 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center gap-12 px-20">
+    <div
+      ref={containerRef}
+      className="w-full h-full flex items-center gap-12 px-20 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
+      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+    >
       {spaces.map((space, index) => (
         <div
           key={space.id}
-          className={`relative cursor-pointer transition-all duration-300 ${
+          ref={space.id === activeSpaceId ? activeCardRef : null}
+          className={`relative cursor-pointer transition-all duration-300 flex-shrink-0 ${
             space.id === activeSpaceId
               ? 'scale-105'
               : 'scale-100 hover:scale-102'
@@ -101,7 +119,7 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
 
       {/* Ghost Placeholder - New Space */}
       <div
-        className="relative cursor-pointer transition-all duration-300 hover:scale-102"
+        className="relative cursor-pointer transition-all duration-300 hover:scale-102 flex-shrink-0"
         onClick={onCreateSpace}
       >
         {/* Ghost Card with Dashed Border */}

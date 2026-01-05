@@ -135,6 +135,7 @@ const App: React.FC = () => {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [showAIModal, setShowAIModal] = useState(false);
   const [editingFolderItem, setEditingFolderItem] = useState<SpatialItem | null>(null);
+  const [editingSpaceName, setEditingSpaceName] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -739,6 +740,18 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
     setEditingFolderItem(null);
   }, [activeSpaceId, editingFolderItem]);
 
+  // Handle space name save
+  const handleSaveSpaceName = useCallback((newName: string) => {
+    setSpaces(prev => ({
+      ...prev,
+      [activeSpaceId]: {
+        ...prev[activeSpaceId],
+        name: newName
+      }
+    }));
+    setEditingSpaceName(false);
+  }, [activeSpaceId]);
+
   // Handle variant creation from MediaViewer
   const handleCreateVariant = useCallback((originalItem: SpatialItem, variantUrl: string, prompt: string) => {
     setSpaces(prev => {
@@ -1130,7 +1143,11 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
               <ArrowLeft size={20} className="text-gray-800" />
             </button>
           )}
-          <div className="px-5 py-2.5 bg-white/40 backdrop-blur-md rounded-full shadow-lg border border-white/60 font-semibold text-sm text-gray-800 select-none">
+          <div
+            className="px-5 py-2.5 bg-white/40 backdrop-blur-md rounded-full shadow-lg border border-white/60 font-semibold text-sm text-gray-800 select-none cursor-pointer hover:bg-white/50 transition-colors"
+            onDoubleClick={() => setEditingSpaceName(true)}
+            title="Double-click to rename"
+          >
             {activeSpace.name}
           </div>
 
@@ -1144,6 +1161,40 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
               <Menu size={20} className="text-gray-800" />
             </button>
           )}
+        </div>
+      )}
+
+      {/* Auto Arrange Button - Top Center */}
+      {!showOverview && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+          <AutoArrangeButton
+            layoutType={activeSpace.layoutType || 'grid'}
+            sortBy={activeSpace.sortBy || 'updated'}
+            onLayoutChange={(layout) => {
+              setSpaces(prev => ({
+                ...prev,
+                [activeSpaceId]: {
+                  ...prev[activeSpaceId],
+                  layoutType: layout
+                }
+              }));
+            }}
+            onSortChange={(sort) => {
+              setSpaces(prev => ({
+                ...prev,
+                [activeSpaceId]: {
+                  ...prev[activeSpaceId],
+                  sortBy: sort
+                }
+              }));
+            }}
+            onArrange={() => handleAutoArrange(
+              activeSpace.layoutType || 'grid',
+              activeSpace.sortBy || 'updated',
+              selection
+            )}
+            hasSelection={selection.size > 0}
+          />
         </div>
       )}
 
@@ -1239,39 +1290,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
         <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
-          {/* Auto Arrange Button */}
-          <AutoArrangeButton
-            layoutType={activeSpace.layoutType || 'grid'}
-            sortBy={activeSpace.sortBy || 'updated'}
-            onLayoutChange={(layout) => {
-              setSpaces(prev => ({
-                ...prev,
-                [activeSpaceId]: {
-                  ...prev[activeSpaceId],
-                  layoutType: layout
-                }
-              }));
-            }}
-            onSortChange={(sort) => {
-              setSpaces(prev => ({
-                ...prev,
-                [activeSpaceId]: {
-                  ...prev[activeSpaceId],
-                  sortBy: sort
-                }
-              }));
-            }}
-            onArrange={() => handleAutoArrange(
-              activeSpace.layoutType || 'grid',
-              activeSpace.sortBy || 'updated',
-              selection
-            )}
-            hasSelection={selection.size > 0}
-          />
-
           {/* AI Studio Button */}
           <button
-            className="bg-blue-600 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-blue-500 text-white transition-all shadow-xl hover:scale-105 active:scale-95"
+            className="bg-blue-500/80 backdrop-blur-md p-3.5 rounded-2xl hover:bg-blue-500/90 text-white transition-all shadow-lg hover:scale-105 active:scale-95 border border-blue-400/40"
             onClick={() => setShowAIModal(true)}
             title="AI Studio"
           >
@@ -1280,7 +1301,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
 
           {/* New Space Button */}
           <button
-            className="bg-gray-900/95 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10"
+            className="bg-white/40 backdrop-blur-md p-3.5 rounded-2xl hover:bg-white/50 text-gray-800 transition-all shadow-lg hover:scale-105 active:scale-95 border border-white/60"
             onClick={() => {
               const newSpaceId = `space-${Date.now()}`;
               setSpaces(prev => ({
@@ -1304,7 +1325,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
 
           {/* Space Indicator */}
           {topLevelSpaces.length > 1 && (
-            <div className="bg-gray-900/95 backdrop-blur-xl rounded-full px-2 py-1.5 shadow-xl border border-white/10">
+            <div className="bg-white/40 backdrop-blur-md rounded-full px-2 py-1.5 shadow-lg border border-white/60">
               <div className="flex items-center gap-2">
                 {/* Previous button */}
                 <button
@@ -1320,7 +1341,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   className={`p-2 rounded-full transition-all ${
                     topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0
                       ? 'opacity-0 cursor-not-allowed'
-                      : 'bg-gray-800/50 hover:bg-gray-700 text-white shadow-lg'
+                      : 'hover:bg-gray-800/10 text-gray-800 shadow-lg'
                   }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1339,8 +1360,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       }}
                       className={`transition-all duration-300 rounded-full ${
                         space.id === activeSpaceId
-                          ? 'w-6 h-1.5 bg-white'
-                          : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60'
+                          ? 'w-6 h-1.5 bg-gray-800'
+                          : 'w-1.5 h-1.5 bg-gray-600/50 hover:bg-gray-700/70'
                       }`}
                       title={space.name}
                     />
@@ -1361,7 +1382,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   className={`p-2 rounded-full transition-all ${
                     topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1
                       ? 'opacity-0 cursor-not-allowed'
-                      : 'bg-gray-800/50 hover:bg-gray-700 text-white shadow-lg'
+                      : 'hover:bg-gray-800/10 text-gray-800 shadow-lg'
                   }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1376,9 +1397,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           <div className="relative">
             {/* Add Menu Dropdown */}
             {showAddMenu && (
-              <div className="absolute bottom-16 right-0 bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="absolute bottom-16 right-0 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200/50 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <button
-                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
                     const now = Date.now();
                     const newItem: SpatialItem = {
@@ -1402,7 +1423,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   <span className="text-sm">Sticky Note</span>
                 </button>
                 <button
-                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
                     const now = Date.now();
                     const newItem: SpatialItem = {
@@ -1425,7 +1446,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   <span className="text-sm">Note</span>
                 </button>
                 <button
-                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
                     const now = Date.now();
                     const newItem: SpatialItem = {
@@ -1448,10 +1469,10 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   <span className="text-sm">Image</span>
                 </button>
                 <button
-                  className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
                     const now = Date.now();
-                    const newSpaceId = `space-${now}`;
+                    const newSpaceId = `stack-${now}`;
                     const newItem: SpatialItem = {
                       id: now.toString(),
                       type: 'folder',
@@ -1461,7 +1482,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       h: 240,
                       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
                       rotation: (Math.random() - 0.5) * 6,
-                      content: 'New Space',
+                      content: 'Stack',
                       linkedSpaceId: newSpaceId,
                       metadata: { createdAt: now, updatedAt: now }
                     };
@@ -1469,7 +1490,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       ...prev,
                       [newSpaceId]: {
                         id: newSpaceId,
-                        name: 'New Space',
+                        name: 'Stack',
                         parentId: activeSpaceId,
                         items: [],
                         connections: [],
@@ -1481,13 +1502,13 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                   }}
                 >
                   <FolderPlus size={18} />
-                  <span className="text-sm">Folder</span>
+                  <span className="text-sm">Stack</span>
                 </button>
               </div>
             )}
 
             <button
-              className={`bg-gray-900 text-white p-3.5 rounded-full hover:bg-black transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 ${showAddMenu ? 'rotate-45' : ''}`}
+              className={`bg-white/40 backdrop-blur-md border border-white/60 text-gray-800 p-3.5 rounded-full hover:bg-white/50 transition-all shadow-lg hover:scale-105 active:scale-95 ${showAddMenu ? 'rotate-45' : ''}`}
               onClick={() => setShowAddMenu(!showAddMenu)}
             >
               {showAddMenu ? <X size={22} /> : <Plus size={22} />}
@@ -1599,6 +1620,15 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           initialName={editingFolderItem.content}
           onSave={handleSaveFolderName}
           onCancel={() => setEditingFolderItem(null)}
+        />
+      )}
+
+      {/* Space Name Editor */}
+      {editingSpaceName && (
+        <NameEditor
+          initialName={activeSpace.name}
+          onSave={handleSaveSpaceName}
+          onCancel={() => setEditingSpaceName(false)}
         />
       )}
     </div>

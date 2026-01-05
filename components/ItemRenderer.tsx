@@ -112,7 +112,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             {/* Top */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-[60]">
               <div
-                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   // Track start position to detect drag vs click
@@ -133,14 +133,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
                   delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
-                <Plus size={14} className="text-white pointer-events-none" />
+                <Plus size={14} className="text-gray-800 pointer-events-none" />
               </div>
             </div>
 
             {/* Right */}
             <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-[60]">
               <div
-                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
@@ -159,14 +159,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
                   delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
-                <Plus size={14} className="text-white pointer-events-none" />
+                <Plus size={14} className="text-gray-800 pointer-events-none" />
               </div>
             </div>
 
             {/* Bottom */}
             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60]">
               <div
-                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
@@ -185,14 +185,14 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
                   delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
-                <Plus size={14} className="text-white pointer-events-none" />
+                <Plus size={14} className="text-gray-800 pointer-events-none" />
               </div>
             </div>
 
             {/* Left */}
             <div className="absolute top-1/2 -left-3 -translate-y-1/2 z-[60]">
               <div
-                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
@@ -211,7 +211,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
                   delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
-                <Plus size={14} className="text-white pointer-events-none" />
+                <Plus size={14} className="text-gray-800 pointer-events-none" />
               </div>
             </div>
           </>
