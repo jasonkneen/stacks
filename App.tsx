@@ -268,11 +268,25 @@ const App: React.FC = () => {
 
   // Delete items
   const handleDeleteItems = useCallback((ids: Set<string>) => {
+    console.log('[App] Deleting items:', {
+      itemIds: Array.from(ids),
+      count: ids.size,
+      spaceId: activeSpaceId
+    });
+
     setSpaces(prev => {
         const space = prev[activeSpaceId];
+        const beforeCount = space.items.length;
         const newItems = space.items.filter(i => !ids.has(i.id));
+        const afterCount = newItems.length;
         // Remove connections attached to deleted items
         const newConnections = (space.connections || []).filter(c => !ids.has(c.from) && !ids.has(c.to));
+
+        console.log('[App] Delete complete:', {
+          beforeCount,
+          afterCount,
+          deleted: beforeCount - afterCount
+        });
 
         return {
             ...prev,

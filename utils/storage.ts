@@ -27,6 +27,12 @@ export const loadMedia = (pointer: string): string | null => {
 // Save all spaces to localStorage
 export const saveSpaces = (spaces: Record<string, Space>) => {
   try {
+    const totalItems = Object.values(spaces).reduce((sum, space) => sum + space.items.length, 0);
+    console.log('[storage] Saving spaces:', {
+      spaceCount: Object.keys(spaces).length,
+      totalItems,
+      timestamp: new Date().toISOString()
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(spaces));
   } catch (e) {
     console.error('Failed to save spaces:', e);
@@ -37,7 +43,16 @@ export const saveSpaces = (spaces: Record<string, Space>) => {
 export const loadSpaces = (): Record<string, Space> | null => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
+    const spaces = data ? JSON.parse(data) : null;
+    if (spaces) {
+      const totalItems = Object.values(spaces).reduce((sum, space) => sum + (space as Space).items.length, 0);
+      console.log('[storage] Loading spaces:', {
+        spaceCount: Object.keys(spaces).length,
+        totalItems,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return spaces;
   } catch (e) {
     console.error('Failed to load spaces:', e);
     return null;
