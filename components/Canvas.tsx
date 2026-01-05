@@ -271,29 +271,17 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Calculate visible grid slots based on viewport and camera
+  // Calculate visible grid slots based on viewport and camera - only when actually dragging/resizing
   const visibleGridSlots = useMemo(() => {
     if (!draggingId && !resizingId) return [];
 
-    const viewportW = window.innerWidth;
-    const viewportH = window.innerHeight;
-
-    // World space bounds of visible area
-    const worldLeft = (-camera.x - viewportW / 2) / camera.zoom;
-    const worldRight = (-camera.x + viewportW / 2) / camera.zoom;
-    const worldTop = (-camera.y - viewportH / 2) / camera.zoom;
-    const worldBottom = (-camera.y + viewportH / 2) / camera.zoom;
-
-    // Grid cell indices
-    const startCol = Math.floor(worldLeft / GRID_SLOT_SIZE);
-    const endCol = Math.ceil(worldRight / GRID_SLOT_SIZE);
-    const startRow = Math.floor(worldTop / GRID_SLOT_SIZE);
-    const endRow = Math.ceil(worldBottom / GRID_SLOT_SIZE);
+    // Limit grid to reasonable area to avoid performance issues
+    const GRID_RADIUS = 5; // Show 5x5 grid cells around center
 
     const slots: Array<{ x: number; y: number; w: number; h: number }> = [];
 
-    for (let row = startRow; row <= endRow; row++) {
-      for (let col = startCol; col <= endCol; col++) {
+    for (let row = -GRID_RADIUS; row <= GRID_RADIUS; row++) {
+      for (let col = -GRID_RADIUS; col <= GRID_RADIUS; col++) {
         slots.push({
           x: col * GRID_SLOT_SIZE,
           y: row * GRID_SLOT_SIZE,
@@ -304,7 +292,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     return slots;
-  }, [camera.x, camera.y, camera.zoom, draggingId, resizingId, GRID_SLOT_SIZE, GRID_CELL_SIZE]);
+  }, [draggingId, resizingId, GRID_SLOT_SIZE, GRID_CELL_SIZE]);
 
   // --- Helpers ---
   const screenToWorld = useCallback((screenX: number, screenY: number) => {

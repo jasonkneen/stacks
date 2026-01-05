@@ -8,6 +8,7 @@ import { NameEditor } from './components/NameEditor';
 import { SpaceOverview } from './components/SpaceOverview';
 import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
+import { AIChat, AIResponse, AI_FORMAT_SYSTEM_PROMPT, parseAIResponse } from './components/AIChat';
 import { AutoArrangeButton } from './components/AutoArrangeButton';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
@@ -569,12 +570,72 @@ const App: React.FC = () => {
       });
   }, [activeSpaceId]);
 
+  // Create item from AI response format
+  const createItemFromAIResponse = useCallback((response: AIResponse, sourceItem: SpatialItem, index: number = 0): SpatialItem => {
+    const baseZIndex = Math.max(...activeSpace.items.map(i => i.zIndex), 0);
+    const now = Date.now();
+
+    const baseX = sourceItem.x + sourceItem.w + 100 + (index * 60);
+    const baseY = sourceItem.y + (index * 60);
+
+    switch (response.format) {
+      case 'sticky':
+        return {
+          id: `ai-sticky-${now}-${index}`,
+          type: 'sticky',
+          x: baseX,
+          y: baseY,
+          w: 200,
+          h: 200,
+          zIndex: baseZIndex + index + 1,
+          rotation: (Math.random() - 0.5) * 6,
+          content: response.content,
+          color: response.metadata?.color || 'bg-yellow-200',
+          metadata: { createdAt: now, updatedAt: now }
+        };
+
+      case 'image':
+        return {
+          id: `ai-image-${now}-${index}`,
+          type: 'image',
+          x: baseX,
+          y: baseY,
+          w: 300,
+          h: 250,
+          zIndex: baseZIndex + index + 1,
+          rotation: (Math.random() - 0.5) * 4,
+          content: response.content,
+          metadata: { createdAt: now, updatedAt: now }
+        };
+
+      case 'note':
+      case 'document':
+      default:
+        return {
+          id: `ai-note-${now}-${index}`,
+          type: 'note',
+          x: baseX,
+          y: baseY,
+          w: 320,
+          h: 400,
+          zIndex: baseZIndex + index + 1,
+          rotation: (Math.random() - 0.5) * 4,
+          content: response.content,
+          metadata: {
+            title: response.metadata?.title,
+            createdAt: now,
+            updatedAt: now
+          }
+        };
+    }
+  }, [activeSpace.items]);
+
   // Handle AI-generated content from connection handle
   const handleAIGeneration = useCallback(async (sourceItemId: string, prompt: string) => {
     const sourceItem = activeSpace.items.find(i => i.id === sourceItemId);
     if (!sourceItem) return;
 
-    // Create new note item positioned near the source
+    // Create placeholder note
     const newItemId = `ai-${Date.now()}`;
     const newItem: SpatialItem = {
       id: newItemId,
@@ -608,9 +669,14 @@ const App: React.FC = () => {
 
     try {
       // Use AI provider with MCP tools when available
-      const { generateTextStream, generateWithTools } = await import('./utils/aiProvider');
+      const { generateTextStream, generateWithTools, generateWithVision } = await import('./utils/aiProvider');
 
-      const contextText = sourceItem.content.replace(/<[^>]*>/g, ' ').trim();
+      // Prepare context based on item type
+      const isVisual = sourceItem.type === 'image' || sourceItem.type === 'video';
+      const contextText = isVisual
+        ? (sourceItem.metadata?.description as string || 'Visual content')
+        : sourceItem.content.replace(/<[^>]*>/g, ' ').trim();
+
       const hasTools = mcp.connected && mcp.tools.length > 0;
 
       // Build tool definitions for Gemini
@@ -668,7 +734,11 @@ const App: React.FC = () => {
 
       if (hasTools) {
         // Use tool-enabled generation
-        const systemPrompt = `You are an AI assistant with access to external tools. Use them when helpful to answer the user's request. Available tools: ${mcp.tools.map(t => t.name).join(', ')}.`;
+        const systemPrompt = `${AI_FORMAT_SYSTEM_PROMPT}
+
+You are an AI assistant with access to external tools. Use them when helpful to answer the user's request. Available tools: ${mcp.tools.map(t => t.name).join(', ')}.
+
+Remember to wrap your responses in the appropriate format tags ([STICKY], [NOTE], [IMAGE], etc.).`;
 
         await generateWithTools(
           `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`,
@@ -685,7 +755,33 @@ User request: ${prompt}
 
 Please provide a thoughtful response in HTML format with proper paragraph tags.`;
 
-        await generateTextStream(fullPrompt, updateContent, {});
+        await generateTextStream(fullPrompt, updateContent, { systemPrompt: AI_FORMAT_SYSTEM_PROMPT });
+      }
+
+      // Parse final response for format tags and create appropriate items
+      const responses = parseAIResponse(fullContent);
+
+      if (responses.length > 1) {
+        // Multiple items - replace placeholder with all generated items
+        const generatedItems = responses.map((resp, idx) => createItemFromAIResponse(resp, sourceItem, idx));
+
+        setSpaces(prev => ({
+          ...prev,
+          [activeSpaceId]: {
+            ...prev[activeSpaceId],
+            // Remove placeholder, add generated items
+            items: [...prev[activeSpaceId].items.filter(i => i.id !== newItemId), ...generatedItems],
+            connections: [
+              ...(prev[activeSpaceId].connections || []),
+              ...generatedItems.map(item => ({
+                id: `conn-${Date.now()}-${item.id}`,
+                from: sourceItemId,
+                to: item.id
+              }))
+            ]
+          }
+        }));
+        return;
       }
 
       // Mark as complete
@@ -1613,11 +1709,12 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-      {/* AI Prompt Popup (from connection handles) */}
+      {/* AI Chat Popup (from connection handles) */}
       {aiPromptState && (
-        <AIPromptPopup
+        <AIChat
           position={aiPromptState.position}
-          onSubmit={(prompt) => {
+          placeholder="Expand on this and create ideas..."
+          onSubmit={(prompt, response) => {
             handleAIGeneration(aiPromptState.itemId, prompt);
             setAIPromptState(null);
           }}
