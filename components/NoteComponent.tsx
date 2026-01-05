@@ -31,10 +31,13 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) =
     }
   };
   
-  // Sync content from props when not editing
+  // Sync content from props when not editing OR on initial mount
   useEffect(() => {
-    if (contentRef.current && !isEditing && contentRef.current.innerHTML !== item.content) {
-       contentRef.current.innerHTML = item.content;
+    if (contentRef.current && contentRef.current.innerHTML !== item.content) {
+      // Only update if not currently editing to preserve cursor position
+      if (!isEditing) {
+        contentRef.current.innerHTML = item.content;
+      }
     }
   }, [item.content, isEditing]);
 
@@ -119,7 +122,6 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) =
             onBlur={() => setIsEditing(false)}
             onInput={handleInput}
             suppressContentEditableWarning
-            dangerouslySetInnerHTML={{ __html: item.content }} // Initial render
         />
         
         <style>{`
