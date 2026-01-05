@@ -564,7 +564,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Drag Item Logic - throttle with RAF for 60fps max
+        // Drag Item Logic
         const targetTilt = deltaX * 0.4;
         setDragTilt(Math.max(Math.min(targetTilt, 12), -12));
 
@@ -576,8 +576,16 @@ export const Canvas: React.FC<CanvasProps> = ({
         const worldDeltaX = totalDeltaX / camera.zoom;
         const worldDeltaY = totalDeltaY / camera.zoom;
 
-        // Store latest delta but don't update items yet
-        latestDragDeltaRef.current = { x: worldDeltaX, y: worldDeltaY };
+        // Update items with absolute positions
+        onUpdateItems(currentItems =>
+            currentItems.map(item => {
+                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+                if (startPos) {
+                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
+                }
+                return item;
+            })
+        );
     } else if (selectionBox) {
         // Lasso Selection Logic
         const currentWorldPos = worldPos;
