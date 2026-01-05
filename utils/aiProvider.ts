@@ -2,7 +2,7 @@ import { streamText, generateText, LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 // Types for MCP tool integration
 export interface MCPToolDefinition {
@@ -37,7 +37,16 @@ const getApiKey = (provider: AIProvider): string => {
     google: 'gemini-api-key',
   };
 
-  const stored = localStorage.getItem(keyMap[provider]);
+  const keyName = keyMap[provider];
+  const stored = localStorage.getItem(keyName);
+
+  console.log(`[aiProvider] Getting API key for ${provider}:`, {
+    keyName,
+    hasKey: !!stored,
+    keyLength: stored?.length || 0,
+    keyPreview: stored ? `${stored.substring(0, 10)}...` : 'none'
+  });
+
   if (stored) return stored;
 
   // Fallback to environment variables
@@ -54,6 +63,14 @@ const getApiKey = (provider: AIProvider): string => {
 export const getLanguageModel = (config: ProviderConfig): LanguageModel => {
   const apiKey = config.apiKey || getApiKey(config.provider);
 
+  console.log(`[aiProvider] getLanguageModel called:`, {
+    provider: config.provider,
+    model: config.model,
+    hasApiKey: !!apiKey,
+    apiKeyLength: apiKey?.length || 0,
+    configApiKey: !!config.apiKey
+  });
+
   if (!apiKey) {
     throw new Error(`${config.provider} API key not configured. Please add your API key in Settings → Providers.`);
   }
@@ -65,8 +82,10 @@ export const getLanguageModel = (config: ProviderConfig): LanguageModel => {
     case 'openai':
       return openai(config.model || 'gpt-4o', { apiKey });
 
-    case 'google':
-      return google(config.model || 'gemini-2.0-flash-exp', { apiKey });
+    case 'google': {
+      const googleProvider = createGoogleGenerativeAI({ apiKey });
+      return googleProvider(config.model || 'gemini-2.0-flash-exp');
+    }
 
     default:
       throw new Error(`Unknown provider: ${config.provider}`);

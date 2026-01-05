@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { AIProvider } from './aiProvider';
 
 export interface VisionAnalysis {
@@ -76,9 +76,11 @@ export const analyzeImageWithVision = async (
     case 'openai':
       model = openai(options?.model || 'gpt-4o', { apiKey });
       break;
-    case 'google':
-      model = google(options?.model || 'gemini-2.0-flash-exp', { apiKey });
+    case 'google': {
+      const googleProvider = createGoogleGenerativeAI({ apiKey });
+      model = googleProvider(options?.model || 'gemini-2.0-flash-exp');
       break;
+    }
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
