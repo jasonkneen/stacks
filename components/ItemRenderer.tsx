@@ -63,10 +63,12 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   const scale = isDragging ? 1.05 : (isSelected ? 1.02 : 1);
 
   const style: React.CSSProperties = {
-    transform: `translate(${item.x}px, ${item.y}px) rotate(${rotation}deg) scale(${scale})`,
+    transform: `translate3d(${item.x}px, ${item.y}px, 0) rotate(${rotation}deg) scale(${scale})`,
     width: item.w,
     height: item.h,
-    zIndex: isDragging ? 9999 : item.zIndex, // Ensure dragged item is always on top visually
+    zIndex: isDragging ? 9999 : item.zIndex,
+    willChange: isInteracting ? 'transform' : 'auto',
+    contain: 'layout style paint',
   };
 
   const renderContent = () => {
@@ -95,9 +97,9 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   const isFolder = item.type === 'folder';
 
   return (
-    <div 
-      className={`${commonClasses} rounded-3xl overflow-visible select-none`}
-      style={{...style, background: 'transparent'}} 
+    <div
+      className={`${commonClasses} rounded-3xl select-none`}
+      style={{...style, background: 'transparent', overflow: 'visible'}}
       onMouseDown={onMouseDown}
       onMouseEnter={() => onHover(item.id)}
       onMouseLeave={() => onHover(null)}
@@ -230,12 +232,27 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
     </div>
   );
 }, (prev, next) => {
-  // Custom comparison for performance
+  // Optimized comparison - only re-render if these specific props change
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.isDragging !== next.isDragging) return false;
+  if (prev.isResizing !== next.isResizing) return false;
+  if (prev.dragTilt !== next.dragTilt) return false;
+
+  // Deep compare only necessary item properties
+  const prevItem = prev.item;
+  const nextItem = next.item;
+
   return (
-    prev.item === next.item &&
-    prev.isSelected === next.isSelected &&
-    prev.isDragging === next.isDragging &&
-    prev.isResizing === next.isResizing &&
-    prev.dragTilt === next.dragTilt
+    prevItem.id === nextItem.id &&
+    prevItem.x === nextItem.x &&
+    prevItem.y === nextItem.y &&
+    prevItem.w === nextItem.w &&
+    prevItem.h === nextItem.h &&
+    prevItem.rotation === nextItem.rotation &&
+    prevItem.content === nextItem.content &&
+    prevItem.color === nextItem.color &&
+    prevItem.type === nextItem.type &&
+    prevItem.zIndex === nextItem.zIndex &&
+    prevItem.metadata?.isGenerating === nextItem.metadata?.isGenerating
   );
 });

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, memo } from 'react';
 import { SpatialItem } from '../types';
 import { Play } from 'lucide-react';
 
@@ -7,7 +7,7 @@ interface Props {
   onDoubleClick: (rect: DOMRect) => void;
 }
 
-export const MediaComponent: React.FC<Props> = ({ item, onDoubleClick }) => {
+export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) => {
   const [loaded, setLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -33,20 +33,24 @@ export const MediaComponent: React.FC<Props> = ({ item, onDoubleClick }) => {
       )}
 
       {item.type === 'image' ? (
-        <img 
-            src={item.content} 
-            alt="media" 
+        <img
+            src={item.content}
+            alt="media"
             className={`w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
             draggable={false}
+            loading="lazy"
+            decoding="async"
             onLoad={() => setLoaded(true)}
         />
       ) : (
         <div className="w-full h-full relative overflow-hidden">
-            <video 
-                src={item.content} 
+            <video
+                src={item.content}
                 className={`w-full h-full object-cover pointer-events-none opacity-80 transition-opacity duration-500 ${loaded ? 'opacity-80' : 'opacity-0'}`}
                 muted
                 loop
+                preload="metadata"
+                playsInline
                 onCanPlay={() => setLoaded(true)}
             />
              {loaded && (
@@ -69,4 +73,8 @@ export const MediaComponent: React.FC<Props> = ({ item, onDoubleClick }) => {
       )}
     </div>
   );
-};
+}, (prev, next) => {
+  // Only re-render if content or metadata changes
+  return prev.item.content === next.item.content &&
+         prev.item.metadata?.isAnalyzing === next.item.metadata?.isAnalyzing;
+});

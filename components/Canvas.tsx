@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { SpatialItem, Connection, LayoutType, SortOption } from '../types';
 import { ItemRenderer } from './ItemRenderer';
 
@@ -622,16 +622,17 @@ export const Canvas: React.FC<CanvasProps> = ({
         cursor: resizingId ? 'se-resize' : isPanning || isSpacePressed ? 'grab' : draggingId ? 'grabbing' : connectingLine ? 'crosshair' : 'default',
       }}
     >
-      <div 
-        className="absolute origin-center will-change-transform"
+      <div
+        className="absolute origin-center"
         style={{
-          transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
+          transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`,
           left: '50%',
           top: '50%',
+          willChange: isPanning || draggingId || resizingId ? 'transform' : 'auto',
         }}
       >
         {/* Connections Layer (Below Items) */}
-        <svg className="absolute top-0 left-0 overflow-visible" style={{ zIndex: 0 }}>
+        <svg className="absolute top-0 left-0 overflow-visible pointer-events-none" style={{ zIndex: 0 }}>
             <defs>
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                     <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
@@ -677,7 +678,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 const midY = (startY + endY) / 2;
 
                 return (
-                    <g key={conn.id} className="group/edge cursor-pointer" onClick={() => onDeleteConnection(conn.id)}>
+                    <g key={conn.id} className="group/edge cursor-pointer pointer-events-auto" onClick={() => onDeleteConnection(conn.id)}>
                         {/* Invisible wider path for easier clicking */}
                         <path
                             d={`M ${startX} ${startY} C ${startX + (endX - startX) * 0.5} ${startY}, ${endX - (endX - startX) * 0.5} ${endY}, ${endX} ${endY}`}
