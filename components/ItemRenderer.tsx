@@ -68,7 +68,6 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
     height: item.h,
     zIndex: isDragging ? 9999 : item.zIndex,
     willChange: isInteracting ? 'transform' : 'auto',
-    contain: 'layout style paint',
   };
 
   const renderContent = () => {
