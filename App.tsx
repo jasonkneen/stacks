@@ -581,8 +581,8 @@ const App: React.FC = () => {
     }));
 
     try {
-      // Use Gemini with MCP tools when available
-      const { generateTextStream, generateWithTools } = await import('./utils/gemini');
+      // Use AI provider with MCP tools when available
+      const { generateTextStream, generateWithTools } = await import('./utils/aiProvider');
 
       const contextText = sourceItem.content.replace(/<[^>]*>/g, ' ').trim();
       const hasTools = mcp.connected && mcp.tools.length > 0;
@@ -650,7 +650,7 @@ User request: ${prompt}
 
 Please provide a thoughtful response in HTML format with proper paragraph tags.`;
 
-        await generateTextStream(fullPrompt, updateContent);
+        await generateTextStream(fullPrompt, updateContent, {});
       }
 
       // Mark as complete

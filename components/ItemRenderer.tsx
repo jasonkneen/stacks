@@ -114,13 +114,23 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
               <div
                 className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => {
-                  // Allow drag for connection
+                  e.preventDefault();
+                  // Track start position to detect drag vs click
+                  (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
                   onConnectStart(e, item.id);
                 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.top });
+                onMouseUp={(e) => {
+                  const startPos = (e.currentTarget as any)._mouseDownPos;
+                  if (startPos) {
+                    const dist = Math.sqrt(Math.pow(e.clientX - startPos.x, 2) + Math.pow(e.clientY - startPos.y, 2));
+                    // If moved less than 5px, treat as click
+                    if (dist < 5) {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.top });
+                    }
+                  }
+                  delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
                 <Plus size={14} className="text-white pointer-events-none" />
@@ -131,11 +141,22 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-[60]">
               <div
                 className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
-                onMouseDown={(e) => onConnectStart(e, item.id)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  onAIPromptStart(e, item.id, { x: rect.right, y: rect.top + rect.height / 2 });
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
+                  onConnectStart(e, item.id);
+                }}
+                onMouseUp={(e) => {
+                  const startPos = (e.currentTarget as any)._mouseDownPos;
+                  if (startPos) {
+                    const dist = Math.sqrt(Math.pow(e.clientX - startPos.x, 2) + Math.pow(e.clientY - startPos.y, 2));
+                    if (dist < 5) {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onAIPromptStart(e, item.id, { x: rect.right, y: rect.top + rect.height / 2 });
+                    }
+                  }
+                  delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
                 <Plus size={14} className="text-white pointer-events-none" />
@@ -146,11 +167,22 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60]">
               <div
                 className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
-                onMouseDown={(e) => onConnectStart(e, item.id)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.bottom });
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
+                  onConnectStart(e, item.id);
+                }}
+                onMouseUp={(e) => {
+                  const startPos = (e.currentTarget as any)._mouseDownPos;
+                  if (startPos) {
+                    const dist = Math.sqrt(Math.pow(e.clientX - startPos.x, 2) + Math.pow(e.clientY - startPos.y, 2));
+                    if (dist < 5) {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.bottom });
+                    }
+                  }
+                  delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
                 <Plus size={14} className="text-white pointer-events-none" />
@@ -161,11 +193,22 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             <div className="absolute top-1/2 -left-3 -translate-y-1/2 z-[60]">
               <div
                 className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
-                onMouseDown={(e) => onConnectStart(e, item.id)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  onAIPromptStart(e, item.id, { x: rect.left, y: rect.top + rect.height / 2 });
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as any)._mouseDownPos = { x: e.clientX, y: e.clientY };
+                  onConnectStart(e, item.id);
+                }}
+                onMouseUp={(e) => {
+                  const startPos = (e.currentTarget as any)._mouseDownPos;
+                  if (startPos) {
+                    const dist = Math.sqrt(Math.pow(e.clientX - startPos.x, 2) + Math.pow(e.clientY - startPos.y, 2));
+                    if (dist < 5) {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onAIPromptStart(e, item.id, { x: rect.left, y: rect.top + rect.height / 2 });
+                    }
+                  }
+                  delete (e.currentTarget as any)._mouseDownPos;
                 }}
               >
                 <Plus size={14} className="text-white pointer-events-none" />
