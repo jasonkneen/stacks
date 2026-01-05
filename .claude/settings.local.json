@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run mcp:build:*)",
+      "Bash(timeout 2 node:*)",
+      "Bash(timeout 3 node:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

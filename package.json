@@ -6,17 +6,35 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mcp:dev": "tsx watch mcp/server.ts",
+    "mcp:build": "tsc -p tsconfig.mcp.json",
+    "mcp:start": "node dist/mcp/server.js",
+    "mcp:proxy": "tsx mcp/proxy.ts",
+    "mcp:proxy:build": "tsc -p tsconfig.mcp.json && mv dist/mcp/proxy.js dist/mcp/proxy.js 2>/dev/null || true"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.2",
+    "@ai-sdk/google": "^3.0.2",
+    "@ai-sdk/openai": "^3.0.2",
+    "@anthropic-ai/sdk": "^0.71.2",
     "@google/genai": "^1.34.0",
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "ai": "^6.0.6",
+    "better-sqlite3": "^12.5.0",
     "elkjs": "0.9.3",
     "lucide-react": "^0.562.0",
+    "openai": "^6.15.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
+    "ws": "^8.18.3",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",

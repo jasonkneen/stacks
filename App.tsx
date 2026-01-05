@@ -7,6 +7,10 @@ import { AIModal } from './components/AIModal';
 import { NameEditor } from './components/NameEditor';
 import { SpaceOverview } from './components/SpaceOverview';
 import { SettingsModal } from './components/SettingsModal';
+import { AIPromptPopup } from './components/AIPromptPopup';
+import { useAutoSave } from './hooks/useAutoSave';
+import { useMCPClient } from './hooks/useMCPClient';
+import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
 import ELK from 'elkjs';
@@ -154,8 +158,15 @@ const getFitToViewParams = (items: SpatialItem[]) => {
 };
 
 const App: React.FC = () => {
-  const [spaces, setSpaces] = useState<Record<string, Space>>(INITIAL_SPACES);
+  // Load from localStorage or use initial data
+  const [spaces, setSpaces] = useState<Record<string, Space>>(() => {
+    const saved = loadSpaces();
+    return saved || INITIAL_SPACES;
+  });
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
+
+  // Autosave enabled
+  useAutoSave(spaces, true);
   const [mediaViewerItem, setMediaViewerItem] = useState<SpatialItem | null>(null);
   const [mediaViewerRect, setMediaViewerRect] = useState<DOMRect | null>(null);
   const [noteViewerItem, setNoteViewerItem] = useState<SpatialItem | null>(null);
@@ -167,6 +178,10 @@ const App: React.FC = () => {
   const [showOverview, setShowOverview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [aiPromptState, setAIPromptState] = useState<{ itemId: string; position: { x: number; y: number } } | null>(null);
+
+  // MCP Client for AI tools
+  const mcp = useMCPClient({ autoConnect: true });
 
   // To trigger camera moves programmatically in Canvas
   const [cameraOverride, setCameraOverride] = useState<{ x: number, y: number, zoom: number, id: string } | undefined>(undefined);
@@ -269,8 +284,7 @@ const App: React.FC = () => {
         };
     });
     setSelection(new Set());
-    triggerAutoFit();
-  }, [activeSpaceId, triggerAutoFit]);
+  }, [activeSpaceId]);
 
   // Ungroup a stack/folder back into individual items
   const handleUngroup = useCallback((folderId: string) => {
@@ -318,8 +332,7 @@ const App: React.FC = () => {
       };
     });
     setSelection(new Set());
-    triggerAutoFit();
-  }, [activeSpaceId, triggerAutoFit]);
+  }, [activeSpaceId]);
 
   // Group selected items into a new stack
   const handleGroupToStack = useCallback((ids: Set<string>) => {
@@ -394,8 +407,7 @@ const App: React.FC = () => {
       };
     });
     setSelection(new Set());
-    triggerAutoFit();
-  }, [activeSpaceId, triggerAutoFit]);
+  }, [activeSpaceId]);
 
   const getSpaceItems = useCallback((spaceId: string) => {
     return spaces[spaceId]?.items || [];
@@ -478,7 +490,6 @@ const App: React.FC = () => {
           camera: { x: 0, y: 0, zoom: 1 }
         }
       }));
-      triggerAutoFit();
 
       // Analyze images in the stack
       stackItems.forEach(item => {
@@ -489,14 +500,13 @@ const App: React.FC = () => {
     } else if (newItems.length === 1) {
       // Single file, just add it
       updateItems([...spaces[activeSpaceId].items, newItems[0]]);
-      triggerAutoFit();
 
       // Analyze if it's an image
       if (newItems[0].type === 'image') {
         analyzeAndUpdateImage(newItems[0].id, newItems[0].content);
       }
     }
-  }, [activeSpaceId, spaces, updateItems, triggerAutoFit, analyzeAndUpdateImage]);
+  }, [activeSpaceId, spaces, updateItems, analyzeAndUpdateImage]);
 
   const handleConnect = useCallback((fromId: string, toId: string) => {
       setSpaces(prev => {
@@ -532,6 +542,151 @@ const App: React.FC = () => {
           };
       });
   }, [activeSpaceId]);
+
+  // Handle AI-generated content from connection handle
+  const handleAIGeneration = useCallback(async (sourceItemId: string, prompt: string) => {
+    const sourceItem = activeSpace.items.find(i => i.id === sourceItemId);
+    if (!sourceItem) return;
+
+    // Create new note item positioned near the source
+    const newItemId = `ai-${Date.now()}`;
+    const newItem: SpatialItem = {
+      id: newItemId,
+      type: 'note',
+      x: sourceItem.x + sourceItem.w + 100,
+      y: sourceItem.y,
+      w: 320,
+      h: 400,
+      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+      rotation: (Math.random() - 0.5) * 4,
+      content: '<p>Generating...</p>',
+      metadata: { isGenerating: true, prompt }
+    };
+
+    // Add item and connection
+    setSpaces(prev => ({
+      ...prev,
+      [activeSpaceId]: {
+        ...prev[activeSpaceId],
+        items: [...prev[activeSpaceId].items, newItem],
+        connections: [
+          ...(prev[activeSpaceId].connections || []),
+          {
+            id: `conn-${Date.now()}`,
+            from: sourceItemId,
+            to: newItemId
+          }
+        ]
+      }
+    }));
+
+    try {
+      // Use Gemini with MCP tools when available
+      const { generateTextStream, generateWithTools } = await import('./utils/gemini');
+
+      const contextText = sourceItem.content.replace(/<[^>]*>/g, ' ').trim();
+      const hasTools = mcp.connected && mcp.tools.length > 0;
+
+      // Build tool definitions for Gemini
+      const toolDefs = hasTools ? mcp.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema,
+        serverId: t.serverId,
+      })) : [];
+
+      // Tool call handler
+      const handleToolCall = async (serverId: string, toolName: string, args: Record<string, any>) => {
+        const result = await mcp.callTool(serverId, toolName, args);
+        if (result?.content) {
+          return result.content
+            .filter((c: any) => c.type === 'text')
+            .map((c: any) => c.text)
+            .join('\n');
+        }
+        return JSON.stringify(result);
+      };
+
+      let fullContent = '';
+
+      const updateContent = (chunk: string) => {
+        fullContent += chunk;
+
+        // Strip markdown code fences if present
+        let cleanedContent = fullContent
+          .replace(/^```html\s*/i, '')
+          .replace(/^```\s*/m, '')
+          .replace(/\s*```$/m, '');
+
+        setSpaces(prev => ({
+          ...prev,
+          [activeSpaceId]: {
+            ...prev[activeSpaceId],
+            items: prev[activeSpaceId].items.map(item =>
+              item.id === newItemId
+                ? { ...item, content: cleanedContent }
+                : item
+            )
+          }
+        }));
+      };
+
+      if (hasTools) {
+        // Use tool-enabled generation
+        const systemPrompt = `You are an AI assistant with access to external tools. Use them when helpful to answer the user's request. Available tools: ${mcp.tools.map(t => t.name).join(', ')}.`;
+
+        await generateWithTools(
+          `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`,
+          toolDefs,
+          handleToolCall,
+          updateContent,
+          { systemPrompt, maxToolCalls: 5 }
+        );
+      } else {
+        // Fallback to simple streaming
+        const fullPrompt = `Based on the context: "${contextText}"
+
+User request: ${prompt}
+
+Please provide a thoughtful response in HTML format with proper paragraph tags.`;
+
+        await generateTextStream(fullPrompt, updateContent);
+      }
+
+      // Mark as complete
+      setSpaces(prev => ({
+        ...prev,
+        [activeSpaceId]: {
+          ...prev[activeSpaceId],
+          items: prev[activeSpaceId].items.map(item =>
+            item.id === newItemId
+              ? { ...item, metadata: { ...item.metadata, isGenerating: false, usedTools: hasTools } }
+              : item
+          )
+        }
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('AI generation failed:', errorMessage, error);
+
+      // Update with detailed error message
+      setSpaces(prev => ({
+        ...prev,
+        [activeSpaceId]: {
+          ...prev[activeSpaceId],
+          items: prev[activeSpaceId].items.map(item =>
+            item.id === newItemId
+              ? {
+                  ...item,
+                  content: `<p>AI generation failed: ${errorMessage}</p>`,
+                  metadata: { ...item.metadata, isGenerating: false }
+                }
+              : item
+          )
+        }
+      }));
+    }
+  }, [activeSpaceId, activeSpace.items, mcp.connected, mcp.tools, mcp.callTool]);
 
   // Handle folder name save
   const handleSaveFolderName = useCallback((newName: string) => {
@@ -793,36 +948,16 @@ const App: React.FC = () => {
   // Navigation Logic
   const handleNavigate = (targetSpaceId: string) => {
     if (spaces[targetSpaceId]) {
-      const targetSpace = spaces[targetSpaceId];
-
       setActiveSpaceId(targetSpaceId);
       setSelection(new Set());
-
-      // Force camera fit AFTER Canvas remounts
-      if (targetSpace.items.length > 0) {
-        setTimeout(() => {
-          const fitParams = getFitToViewParams(targetSpace.items);
-          setCameraOverride({ ...fitParams, id: Date.now().toString() });
-        }, 0);
-      }
     }
   };
 
   const handleBack = () => {
     if (activeSpace.parentId) {
       const parentId = activeSpace.parentId;
-      const parentSpace = spaces[parentId];
-
       setActiveSpaceId(parentId);
       setSelection(new Set());
-
-      // Force camera fit AFTER Canvas remounts
-      if (parentSpace && parentSpace.items.length > 0) {
-        setTimeout(() => {
-          const fitParams = getFitToViewParams(parentSpace.items);
-          setCameraOverride({ ...fitParams, id: Date.now().toString() });
-        }, 0);
-      }
     }
   };
 
@@ -857,12 +992,6 @@ const App: React.FC = () => {
               const prevSpace = topLevelSpaces[currentIndex - 1];
               setActiveSpaceId(prevSpace.id);
               setSelection(new Set());
-              if (prevSpace.items.length > 0) {
-                setTimeout(() => {
-                  const fitParams = getFitToViewParams(prevSpace.items);
-                  setCameraOverride({ ...fitParams, id: Date.now().toString() });
-                }, 0);
-              }
             }
           }
       } else if (e.key === 'ArrowRight' && e.metaKey && topLevelSpaces.length > 1) {
@@ -874,12 +1003,6 @@ const App: React.FC = () => {
               const nextSpace = topLevelSpaces[currentIndex + 1];
               setActiveSpaceId(nextSpace.id);
               setSelection(new Set());
-              if (nextSpace.items.length > 0) {
-                setTimeout(() => {
-                  const fitParams = getFitToViewParams(nextSpace.items);
-                  setCameraOverride({ ...fitParams, id: Date.now().toString() });
-                }, 0);
-              }
             }
           }
       } else if (e.key === 'o' && e.metaKey && topLevelSpaces.length > 1) {
@@ -935,20 +1058,10 @@ const App: React.FC = () => {
             setActiveSpaceId(spaceId);
             setShowOverview(false);
             setSelection(new Set());
-            const targetSpace = spaces[spaceId];
-            if (targetSpace && targetSpace.items.length > 0) {
-              setTimeout(() => {
-                const fitParams = getFitToViewParams(targetSpace.items);
-                setCameraOverride({ ...fitParams, id: Date.now().toString() });
-              }, 0);
-            }
           }}
         />
       ) : (
-        <div
-          key={activeSpaceId}
-          className="w-full h-full animate-space-enter"
-        >
+        <div className="w-full h-full">
           <Canvas
               items={activeSpace.items}
               connections={activeSpace.connections || []}
@@ -979,6 +1092,18 @@ const App: React.FC = () => {
                     : item
                 );
                 updateItems(updatedItems);
+              }}
+              onAIPromptStart={(itemId, position) => {
+                setAIPromptState({ itemId, position });
+              }}
+              onCameraChange={(camera) => {
+                setSpaces(prev => ({
+                  ...prev,
+                  [activeSpaceId]: {
+                    ...prev[activeSpaceId],
+                    camera
+                  }
+                }));
               }}
           />
         </div>
@@ -1053,12 +1178,6 @@ const App: React.FC = () => {
                       const prevSpace = topLevelSpaces[currentIndex - 1];
                       setActiveSpaceId(prevSpace.id);
                       setSelection(new Set());
-                      if (prevSpace.items.length > 0) {
-                        setTimeout(() => {
-                          const fitParams = getFitToViewParams(prevSpace.items);
-                          setCameraOverride({ ...fitParams, id: Date.now().toString() });
-                        }, 0);
-                      }
                     }
                   }}
                   disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0}
@@ -1081,12 +1200,6 @@ const App: React.FC = () => {
                       onClick={() => {
                         setActiveSpaceId(space.id);
                         setSelection(new Set());
-                        if (space.items.length > 0) {
-                          setTimeout(() => {
-                            const fitParams = getFitToViewParams(space.items);
-                            setCameraOverride({ ...fitParams, id: Date.now().toString() });
-                          }, 0);
-                        }
                       }}
                       className={`transition-all duration-300 rounded-full ${
                         space.id === activeSpaceId
@@ -1106,12 +1219,6 @@ const App: React.FC = () => {
                       const nextSpace = topLevelSpaces[currentIndex + 1];
                       setActiveSpaceId(nextSpace.id);
                       setSelection(new Set());
-                      if (nextSpace.items.length > 0) {
-                        setTimeout(() => {
-                          const fitParams = getFitToViewParams(nextSpace.items);
-                          setCameraOverride({ ...fitParams, id: Date.now().toString() });
-                        }, 0);
-                      }
                     }
                   }}
                   disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1}
@@ -1266,6 +1373,18 @@ const App: React.FC = () => {
 
       {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      {/* AI Prompt Popup (from connection handles) */}
+      {aiPromptState && (
+        <AIPromptPopup
+          position={aiPromptState.position}
+          onSubmit={(prompt) => {
+            handleAIGeneration(aiPromptState.itemId, prompt);
+            setAIPromptState(null);
+          }}
+          onClose={() => setAIPromptState(null)}
+        />
+      )}
 
       {/* AI Modal */}
       {showAIModal && (

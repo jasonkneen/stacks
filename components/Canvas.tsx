@@ -20,6 +20,8 @@ interface CanvasProps {
   onDeleteConnection: (connectionId: string) => void;
   onDropFiles: (files: File[], position: { x: number; y: number }) => void;
   onMarkManuallyPositioned: (ids: string[]) => void;
+  onAIPromptStart: (itemId: string, position: { x: number; y: number }) => void;
+  onCameraChange?: (camera: { x: number; y: number; zoom: number }) => void;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -39,11 +41,23 @@ export const Canvas: React.FC<CanvasProps> = ({
   onConnect,
   onDeleteConnection,
   onDropFiles,
-  onMarkManuallyPositioned
+  onMarkManuallyPositioned,
+  onAIPromptStart,
+  onCameraChange
 }) => {
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
-  
+
+  // Save camera changes back to parent (debounced)
+  useEffect(() => {
+    if (onCameraChange) {
+      const timeout = setTimeout(() => {
+        onCameraChange(camera);
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [camera, onCameraChange]);
+
   // Handle Camera Override (e.g. Auto Layout)
   useEffect(() => {
     if (cameraOverride) {
@@ -591,6 +605,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             getSpaceItems={getSpaceItems}
             onHover={setHoveredItemId}
             onConnectStart={handleConnectStart}
+            onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
           />
         ))}
 

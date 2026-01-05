@@ -1,9 +1,10 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { SpatialItem } from '../types';
 import { StickyComponent } from './StickyComponent';
 import { NoteComponent } from './NoteComponent';
 import { MediaComponent } from './MediaComponent';
 import { FolderComponent } from './FolderComponent';
+import { Plus } from 'lucide-react';
 
 interface ItemRendererProps {
   item: SpatialItem;
@@ -21,6 +22,7 @@ interface ItemRendererProps {
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onHover: (id: string | null) => void;
   onConnectStart: (e: React.MouseEvent, id: string) => void;
+  onAIPromptStart: (e: React.MouseEvent, itemId: string, position: { x: number; y: number }) => void;
 }
 
 export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
@@ -38,16 +40,20 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onEditFolderName,
   getSpaceItems,
   onHover,
-  onConnectStart
+  onConnectStart,
+  onAIPromptStart
 }) => {
+  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
   
   // Dynamic Transition: NONE during drag/resize to prevent lag
   const isInteracting = isDragging || isResizing;
+  const isGenerating = item.metadata?.isGenerating;
+
   const commonClasses = `absolute will-change-transform group/item ${
     isInteracting
       ? 'shadow-[0_30px_60px_-10px_rgba(0,0,0,0.3)] z-[100] transition-none'
       : `transition-shadow duration-300 ${isSelected ? 'ring-4 ring-blue-500/50 shadow-2xl z-50' : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'}`
-  }`;
+  } ${isGenerating ? 'animate-pulse ring-4 ring-blue-400/50' : ''}`;
 
   // Calculate final transform
   // 1. Base rotation (random scatter)
@@ -104,25 +110,67 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       {!isDragging && !isResizing && (
           <>
             {/* Top */}
-            <div
-                className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
-                onMouseDown={(e) => onConnectStart(e, item.id)}
-            />
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-[60]">
+              <div
+                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
+                onMouseDown={(e) => {
+                  // Allow drag for connection
+                  onConnectStart(e, item.id);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.top });
+                }}
+              >
+                <Plus size={14} className="text-white pointer-events-none" />
+              </div>
+            </div>
+
             {/* Right */}
-            <div
-                className="absolute top-1/2 -right-3 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
+            <div className="absolute top-1/2 -right-3 -translate-y-1/2 z-[60]">
+              <div
+                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
-            />
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onAIPromptStart(e, item.id, { x: rect.right, y: rect.top + rect.height / 2 });
+                }}
+              >
+                <Plus size={14} className="text-white pointer-events-none" />
+              </div>
+            </div>
+
             {/* Bottom */}
-            <div
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60]">
+              <div
+                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
-            />
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onAIPromptStart(e, item.id, { x: rect.left + rect.width / 2, y: rect.bottom });
+                }}
+              >
+                <Plus size={14} className="text-white pointer-events-none" />
+              </div>
+            </div>
+
             {/* Left */}
-            <div
-                className="absolute top-1/2 -left-3 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-crosshair z-[60] shadow-sm hover:scale-125"
+            <div className="absolute top-1/2 -left-3 -translate-y-1/2 z-[60]">
+              <div
+                className="w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-500 opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
                 onMouseDown={(e) => onConnectStart(e, item.id)}
-            />
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onAIPromptStart(e, item.id, { x: rect.left, y: rect.top + rect.height / 2 });
+                }}
+              >
+                <Plus size={14} className="text-white pointer-events-none" />
+              </div>
+            </div>
           </>
       )}
 

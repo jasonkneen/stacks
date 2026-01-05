@@ -88,24 +88,39 @@ export const generateDescription = async (imageUrl: string, colors: string[]): P
   return descriptions[Math.floor(Math.random() * descriptions.length)];
 };
 
-// Full analysis function
+// Full analysis function with multi-provider vision
 export const analyzeImage = async (imageUrl: string): Promise<ImageAnalysis> => {
   try {
-    const colors = await extractColors(imageUrl);
-    const description = await generateDescription(imageUrl, colors);
+    // Try vision API first (supports Anthropic, OpenAI, Google)
+    const { analyzeImageWithVision } = await import('./visionAnalysis');
+    const result = await analyzeImageWithVision(imageUrl);
 
     return {
-      description,
-      colors,
+      description: result.description,
+      colors: result.colors,
       isAnalyzing: false
     };
   } catch (error) {
-    console.error('Image analysis failed:', error);
-    return {
-      description: 'Unable to analyze image',
-      colors: [],
-      isAnalyzing: false
-    };
+    console.error('Vision API analysis failed, using fallback:', error);
+
+    // Fallback to local analysis
+    try {
+      const colors = await extractColors(imageUrl);
+      const description = await generateDescription(imageUrl, colors);
+
+      return {
+        description,
+        colors,
+        isAnalyzing: false
+      };
+    } catch (fallbackError) {
+      console.error('Fallback analysis failed:', fallbackError);
+      return {
+        description: 'Unable to analyze image',
+        colors: [],
+        isAnalyzing: false
+      };
+    }
   }
 };
 
