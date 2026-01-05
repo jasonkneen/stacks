@@ -10,9 +10,13 @@ export interface ImageAnalysis {
 export const extractColors = async (imageUrl: string, numColors: number = 6): Promise<string[]> => {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'Anonymous';
+    // Don't set crossOrigin for data URLs
+    if (!imageUrl.startsWith('data:')) {
+      img.crossOrigin = 'Anonymous';
+    }
 
     img.onload = () => {
+      console.log('[extractColors] Image loaded, extracting colors...');
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -62,10 +66,14 @@ export const extractColors = async (imageUrl: string, numColors: number = 6): Pr
         }
       }
 
+      console.log('[extractColors] Extracted colors:', distinctColors);
       resolve(distinctColors);
     };
 
-    img.onerror = () => resolve([]);
+    img.onerror = (err) => {
+      console.error('[extractColors] Image load failed:', err);
+      resolve([]);
+    };
     img.src = imageUrl;
   });
 };

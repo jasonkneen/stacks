@@ -43,40 +43,70 @@ const sortItems = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
   });
 };
 
-// Grid Layout: Regular grid with uniform spacing
-const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+// Grid Layout: Respects custom grid cell sizes
+const arrangeGrid = (items: SpatialItem[], sortBy: SortOption, GRID_CELL_SIZE: number = 220, GRID_GAP: number = 40): SpatialItem[] => {
   if (items.length === 0) return items;
 
   const sorted = sortItems(items, sortBy);
+  const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
 
-  const GRID_GAP = 40;
-  const ITEM_SIZE = 220;
-
-  // Calculate grid dimensions
+  // Build grid using item sizes
   const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
-  const rows = Math.ceil(items.length / COLS);
+  let currentX = 0;
+  let currentY = 0;
+  let currentRow = 0;
+  let maxRowHeight = 0;
 
-  const totalWidth = COLS * ITEM_SIZE + (COLS - 1) * GRID_GAP;
-  const totalHeight = rows * ITEM_SIZE + (rows - 1) * GRID_GAP;
+  const arranged = sorted.map((item) => {
+    // Use stored grid dimensions or default to 1x1
+    const gridW = item.metadata?.gridCellsX || 1;
+    const gridH = item.metadata?.gridCellsY || 1;
 
-  const startX = -totalWidth / 2;
-  const startY = -totalHeight / 2;
+    const w = gridW * SLOT_SIZE - GRID_GAP;
+    const h = gridH * SLOT_SIZE - GRID_GAP;
 
-  return sorted.map((item, index) => {
-    const col = index % COLS;
-    const row = Math.floor(index / COLS);
+    // Simple flow layout
+    const x = currentX * SLOT_SIZE;
+    const y = currentY * SLOT_SIZE;
+
+    // Update position for next item
+    currentX += gridW;
+    maxRowHeight = Math.max(maxRowHeight, gridH);
+
+    // Wrap to next row if needed
+    if (currentX >= COLS) {
+      currentX = 0;
+      currentY += maxRowHeight;
+      maxRowHeight = 0;
+    }
+
     return {
       ...item,
-      x: startX + col * (ITEM_SIZE + GRID_GAP),
-      y: startY + row * (ITEM_SIZE + GRID_GAP),
-      w: ITEM_SIZE,
-      h: ITEM_SIZE,
+      x,
+      y,
+      w,
+      h,
       rotation: 0,
     };
   });
+
+  // Center the grid
+  const minX = Math.min(...arranged.map(i => i.x));
+  const maxX = Math.max(...arranged.map(i => i.x + i.w));
+  const minY = Math.min(...arranged.map(i => i.y));
+  const maxY = Math.max(...arranged.map(i => i.y + i.h));
+
+  const offsetX = -(minX + maxX) / 2;
+  const offsetY = -(minY + maxY) / 2;
+
+  return arranged.map(item => ({
+    ...item,
+    x: item.x + offsetX,
+    y: item.y + offsetY
+  }));
 };
 
-// Bento Layout: Masonry-style with varied sizes
+// Bento Layout: Masonry-style with varied sizes (wider preferred)
 const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
   if (items.length === 0) return items;
 
@@ -84,17 +114,20 @@ const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] =
 
   const GAP = 20;
   const SMALL = 180;
-  const LARGE = 380;
+  const LARGE_W = 400; // Wider
+  const LARGE_H = 280; // Less tall - landscape preference
   const COLS = 3;
 
   // Track column heights for masonry layout
   const colHeights = new Array(COLS).fill(0);
 
   const arranged = sorted.map((item, index) => {
-    // Vary sizes: every 4th item is large
-    const isLarge = index % 4 === 0;
-    const w = isLarge ? LARGE : SMALL;
-    const h = isLarge ? LARGE : SMALL;
+    // Use stored grid dimensions or vary sizes
+    const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
+    const isLarge = hasCustomSize || index % 4 === 0;
+
+    const w = isLarge ? LARGE_W : SMALL;
+    const h = isLarge ? LARGE_H : SMALL;
 
     // Find shortest column
     const minHeight = Math.min(...colHeights);
@@ -202,10 +235,16 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [cameraOverride]);
 
+  // Grid Settings
+  const GRID_CELL_SIZE = 220;
+  const GRID_GAP = 40;
+  const GRID_SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
+
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }> } | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
-  const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number } | null>(null);
+  const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number } | null>(null);
   
   // Panning & Selection Modes
   const [isPanning, setIsPanning] = useState(false);
@@ -231,6 +270,41 @@ export const Canvas: React.FC<CanvasProps> = ({
   const lastTimeRef = useRef<number>(0);
 
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Calculate visible grid slots based on viewport and camera
+  const visibleGridSlots = useMemo(() => {
+    if (!draggingId && !resizingId) return [];
+
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    // World space bounds of visible area
+    const worldLeft = (-camera.x - viewportW / 2) / camera.zoom;
+    const worldRight = (-camera.x + viewportW / 2) / camera.zoom;
+    const worldTop = (-camera.y - viewportH / 2) / camera.zoom;
+    const worldBottom = (-camera.y + viewportH / 2) / camera.zoom;
+
+    // Grid cell indices
+    const startCol = Math.floor(worldLeft / GRID_SLOT_SIZE);
+    const endCol = Math.ceil(worldRight / GRID_SLOT_SIZE);
+    const startRow = Math.floor(worldTop / GRID_SLOT_SIZE);
+    const endRow = Math.ceil(worldBottom / GRID_SLOT_SIZE);
+
+    const slots: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+    for (let row = startRow; row <= endRow; row++) {
+      for (let col = startCol; col <= endCol; col++) {
+        slots.push({
+          x: col * GRID_SLOT_SIZE,
+          y: row * GRID_SLOT_SIZE,
+          w: GRID_CELL_SIZE,
+          h: GRID_CELL_SIZE
+        });
+      }
+    }
+
+    return slots;
+  }, [camera.x, camera.y, camera.zoom, draggingId, resizingId, GRID_SLOT_SIZE, GRID_CELL_SIZE]);
 
   // --- Helpers ---
   const screenToWorld = useCallback((screenX: number, screenY: number) => {
@@ -362,8 +436,23 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handleItemMouseDown = (e: React.MouseEvent, itemId: string) => {
     e.stopPropagation();
 
+    // Store initial positions for absolute-position-based dragging
+    const itemsToDrag = selection.has(itemId)
+      ? items.filter(item => selection.has(item.id))
+      : items.filter(item => item.id === itemId);
+
+    const positionMap = new Map<string, { x: number; y: number }>();
+    itemsToDrag.forEach(item => {
+      positionMap.set(item.id, { x: item.x, y: item.y });
+    });
+
+    dragStartDataRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      itemPositions: positionMap
+    };
+
     // Bring to front - use functional update to avoid stale closure bugs
-    // (e.g., if an item was just deleted, items prop might be stale)
     onUpdateItems(currentItems => {
       const maxZ = Math.max(...currentItems.map(i => i.zIndex), 0);
       return currentItems.map(item =>
@@ -409,11 +498,17 @@ export const Canvas: React.FC<CanvasProps> = ({
       if (!item) return;
 
       setResizingId(itemId);
+      // Calculate current grid cells occupied
+      const gridX = Math.round(item.w / GRID_SLOT_SIZE);
+      const gridY = Math.round(item.h / GRID_SLOT_SIZE);
+
       resizeStartRef.current = {
           w: item.w,
           h: item.h,
           mouseX: e.clientX,
-          mouseY: e.clientY
+          mouseY: e.clientY,
+          gridX: Math.max(1, gridX),
+          gridY: Math.max(1, gridY)
       };
   };
 
@@ -437,13 +532,32 @@ export const Canvas: React.FC<CanvasProps> = ({
         const scaledDeltaX = deltaMouseX / camera.zoom;
         const scaledDeltaY = deltaMouseY / camera.zoom;
 
-        const newW = Math.max(80, startData.w + scaledDeltaX);
-        const newH = Math.max(80, startData.h + scaledDeltaY);
+        // Calculate raw new dimensions
+        const rawW = Math.max(GRID_CELL_SIZE * 0.8, startData.w + scaledDeltaX);
+        const rawH = Math.max(GRID_CELL_SIZE * 0.8, startData.h + scaledDeltaY);
 
-        // Use functional update to avoid stale closure
+        // Snap to grid multiples
+        const gridCellsX = Math.max(1, Math.round(rawW / GRID_SLOT_SIZE));
+        const gridCellsY = Math.max(1, Math.round(rawH / GRID_SLOT_SIZE));
+
+        const newW = gridCellsX * GRID_SLOT_SIZE - GRID_GAP;
+        const newH = gridCellsY * GRID_SLOT_SIZE - GRID_GAP;
+
+        // Use functional update and store grid dimensions in metadata
         onUpdateItems(currentItems =>
             currentItems.map(item =>
-                item.id === resizingId ? { ...item, w: newW, h: newH } : item
+                item.id === resizingId
+                  ? {
+                      ...item,
+                      w: newW,
+                      h: newH,
+                      metadata: {
+                        ...item.metadata,
+                        gridCellsX,
+                        gridCellsY
+                      }
+                    }
+                  : item
             )
         );
         return;
@@ -459,20 +573,25 @@ export const Canvas: React.FC<CanvasProps> = ({
         return;
     }
 
-    if (draggingId) {
-        // Drag Item Logic
+    if (draggingId && dragStartDataRef.current) {
+        // Drag Item Logic - use absolute positions
         const targetTilt = deltaX * 0.4;
         setDragTilt(Math.max(Math.min(targetTilt, 12), -12));
 
-        // FIX: Divide by zoom ONCE, not compounding
-        const worldDeltaX = deltaX / camera.zoom;
-        const worldDeltaY = deltaY / camera.zoom;
+        // Calculate total mouse movement from drag start in screen space
+        const totalDeltaX = e.clientX - dragStartDataRef.current.mouseX;
+        const totalDeltaY = e.clientY - dragStartDataRef.current.mouseY;
 
-        // Use functional update to avoid stale closure
+        // Convert to world space ONCE
+        const worldDeltaX = totalDeltaX / camera.zoom;
+        const worldDeltaY = totalDeltaY / camera.zoom;
+
+        // Use functional update with absolute positions from drag start
         onUpdateItems(currentItems =>
             currentItems.map(item => {
-                if (item.id === draggingId || (selection.has(item.id) && selection.has(draggingId))) {
-                    return { ...item, x: item.x + worldDeltaX, y: item.y + worldDeltaY };
+                const startPos = dragStartDataRef.current?.itemPositions.get(item.id);
+                if (startPos) {
+                    return { ...item, x: startPos.x + worldDeltaX, y: startPos.y + worldDeltaY };
                 }
                 return item;
             })
@@ -512,8 +631,39 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [isPanning, draggingId, resizingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
-    // Clear resize state
+    // Clear resize state and trigger auto-arrange around resized item
     if (resizingId) {
+        const resizedItem = items.find(i => i.id === resizingId);
+
+        if (resizedItem && onAutoArrange) {
+          // Auto-arrange all OTHER items around the resized one
+          const otherItemIds = items.filter(i => i.id !== resizingId).map(i => i.id);
+
+          // Trigger arrange for other items only (keeps resized item in place)
+          setTimeout(() => {
+            // Use grid layout for the other items, positioned around the resized item
+            const otherItems = items.filter(i => i.id !== resizingId);
+            if (otherItems.length > 0) {
+              // Simple grid arrangement around resized item
+              const sorted = [...otherItems].sort((a, b) =>
+                (b.metadata?.updatedAt || 0) - (a.metadata?.updatedAt || 0)
+              );
+
+              const arranged = sorted.map((item, index) => {
+                const col = index % 3;
+                const row = Math.floor(index / 3);
+                return {
+                  ...item,
+                  x: resizedItem.x + (col - 1) * GRID_SLOT_SIZE + (col > 0 ? resizedItem.w + GRID_GAP : -GRID_SLOT_SIZE),
+                  y: resizedItem.y + (row - 1) * GRID_SLOT_SIZE + (row > 0 ? resizedItem.h + GRID_GAP : -GRID_SLOT_SIZE),
+                };
+              });
+
+              onUpdateItems([resizedItem, ...arranged]);
+            }
+          }, 50);
+        }
+
         setResizingId(null);
         resizeStartRef.current = null;
         return;
@@ -566,6 +716,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
     setIsPanning(false);
     setDraggingId(null);
+    dragStartDataRef.current = null;
     setDragTilt(0);
     setSelectionBox(null);
   }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia]); 
@@ -729,6 +880,24 @@ export const Canvas: React.FC<CanvasProps> = ({
                 />
             )}
         </svg>
+
+        {/* Grid Slot Visualization - Only during drag/resize */}
+        {visibleGridSlots.length > 0 && (
+          <div className="absolute top-0 left-0 pointer-events-none" style={{ zIndex: 1 }}>
+            {visibleGridSlots.map((slot, idx) => (
+              <div
+                key={idx}
+                className="absolute border border-gray-300/20 rounded-2xl transition-opacity duration-200"
+                style={{
+                  left: slot.x,
+                  top: slot.y,
+                  width: slot.w,
+                  height: slot.h,
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         {items.map(item => (
           <ItemRenderer

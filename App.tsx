@@ -178,6 +178,8 @@ const App: React.FC = () => {
   const analyzeAndUpdateImage = useCallback(async (itemId: string, imageUrl: string, spaceId?: string) => {
     const targetSpaceId = spaceId || activeSpaceId;
 
+    console.log('[App] Starting image analysis for:', itemId);
+
     // Mark as analyzing
     setSpaces(prev => ({
       ...prev,
@@ -192,7 +194,26 @@ const App: React.FC = () => {
     }));
 
     // Run analysis
-    const analysis = await analyzeImage(imageUrl);
+    let analysis;
+    try {
+      analysis = await analyzeImage(imageUrl);
+      console.log('[App] Analysis complete:', { colors: analysis.colors.length, hasDescription: !!analysis.description });
+    } catch (error) {
+      console.error('[App] Analysis failed:', error);
+      // Clear analyzing flag on error
+      setSpaces(prev => ({
+        ...prev,
+        [targetSpaceId]: {
+          ...prev[targetSpaceId],
+          items: prev[targetSpaceId].items.map(item =>
+            item.id === itemId
+              ? { ...item, metadata: { ...item.metadata, isAnalyzing: false } }
+              : item
+          )
+        }
+      }));
+      return;
+    }
 
     // Update with results
     setSpaces(prev => {
@@ -950,25 +971,47 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       if (items.length === 0) return items;
       const sorted = sortItems(items, sortBy);
       const GRID_GAP = 40;
-      const ITEM_SIZE = 220;
+      const GRID_CELL_SIZE = 220;
+      const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
+
       const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
-      const rows = Math.ceil(items.length / COLS);
-      const totalWidth = COLS * ITEM_SIZE + (COLS - 1) * GRID_GAP;
-      const totalHeight = rows * ITEM_SIZE + (rows - 1) * GRID_GAP;
-      const startX = -totalWidth / 2;
-      const startY = -totalHeight / 2;
-      return sorted.map((item, index) => {
-        const col = index % COLS;
-        const row = Math.floor(index / COLS);
-        return {
-          ...item,
-          x: startX + col * (ITEM_SIZE + GRID_GAP),
-          y: startY + row * (ITEM_SIZE + GRID_GAP),
-          w: ITEM_SIZE,
-          h: ITEM_SIZE,
-          rotation: 0,
-        };
+      let currentX = 0;
+      let currentY = 0;
+      let maxRowHeight = 0;
+
+      const arranged = sorted.map((item) => {
+        // Use stored grid dimensions or default to 1x1
+        const gridW = item.metadata?.gridCellsX || 1;
+        const gridH = item.metadata?.gridCellsY || 1;
+
+        const w = gridW * SLOT_SIZE - GRID_GAP;
+        const h = gridH * SLOT_SIZE - GRID_GAP;
+
+        const x = currentX * SLOT_SIZE;
+        const y = currentY * SLOT_SIZE;
+
+        currentX += gridW;
+        maxRowHeight = Math.max(maxRowHeight, gridH);
+
+        if (currentX >= COLS) {
+          currentX = 0;
+          currentY += maxRowHeight;
+          maxRowHeight = 0;
+        }
+
+        return { ...item, x, y, w, h, rotation: 0 };
       });
+
+      // Center the grid
+      const minX = Math.min(...arranged.map(i => i.x));
+      const maxX = Math.max(...arranged.map(i => i.x + i.w));
+      const minY = Math.min(...arranged.map(i => i.y));
+      const maxY = Math.max(...arranged.map(i => i.y + i.h));
+
+      const offsetX = -(minX + maxX) / 2;
+      const offsetY = -(minY + maxY) / 2;
+
+      return arranged.map(item => ({ ...item, x: item.x + offsetX, y: item.y + offsetY }));
     };
 
     const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
@@ -976,13 +1019,18 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       const sorted = sortItems(items, sortBy);
       const GAP = 20;
       const SMALL = 180;
-      const LARGE = 380;
+      const LARGE_W = 400; // Wider
+      const LARGE_H = 280; // Less tall - prefer landscape
       const COLS = 3;
       const colHeights = new Array(COLS).fill(0);
       const arranged = sorted.map((item, index) => {
-        const isLarge = index % 4 === 0;
-        const w = isLarge ? LARGE : SMALL;
-        const h = isLarge ? LARGE : SMALL;
+        // Use stored grid dimensions to determine if item should be large
+        const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
+        const isLarge = hasCustomSize || index % 4 === 0;
+
+        const w = isLarge ? LARGE_W : SMALL;
+        const h = isLarge ? LARGE_H : SMALL;
+
         const minHeight = Math.min(...colHeights);
         const col = colHeights.indexOf(minHeight);
         const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);

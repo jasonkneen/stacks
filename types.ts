@@ -33,6 +33,8 @@ export interface SpatialItem {
     createdAt?: number;   // Timestamp for sorting by added
     updatedAt?: number;   // Timestamp for sorting by updated
     usedTools?: boolean;
+    gridCellsX?: number;  // Grid cells occupied horizontally
+    gridCellsY?: number;  // Grid cells occupied vertically
   };
   linkedSpaceId?: string; // For folders
 }

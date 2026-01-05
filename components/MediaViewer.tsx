@@ -26,10 +26,11 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
 
   // Trigger analysis if no data and it's an image
   useEffect(() => {
-    if (item.type === 'image' && !description && !isAnalyzing && colors.length === 0 && onAnalyze) {
+    if (item.type === 'image' && !isAnalyzing && colors.length === 0 && onAnalyze) {
+      console.log('[MediaViewer] Triggering analysis for image:', item.id);
       onAnalyze(item.id, item.content);
     }
-  }, [item.id, item.type, item.content, description, isAnalyzing, colors.length, onAnalyze]);
+  }, [item.id, item.type, item.content, isAnalyzing, colors.length, onAnalyze]);
 
   // Calculate target position (centered)
   const getTargetRect = () => {
