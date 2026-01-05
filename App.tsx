@@ -66,8 +66,29 @@ const getFitToViewParams = (items: SpatialItem[]) => {
 
 const App: React.FC = () => {
   // Load from localStorage or use initial data
-  const [spaces, setSpaces] = useState<Record<string, Space>>(INITIAL_SPACES);
+  const [spaces, setSpacesRaw] = useState<Record<string, Space>>(INITIAL_SPACES);
   const [isLoadingSpaces, setIsLoadingSpaces] = useState(true);
+
+  // Wrap setSpaces to log all state changes and track item counts
+  const setSpaces = useCallback((update: any) => {
+    setSpacesRaw(prev => {
+      const newState = typeof update === 'function' ? update(prev) : update;
+      const prevCount = Object.values(prev).reduce((sum, s) => sum + s.items.length, 0);
+      const newCount = Object.values(newState).reduce((sum, s) => sum + s.items.length, 0);
+
+      if (prevCount !== newCount) {
+        const stack = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
+        console.log('[App] setSpaces - item count changed:', {
+          from: prevCount,
+          to: newCount,
+          diff: newCount - prevCount,
+          caller: stack.substring(stack.lastIndexOf('/') + 1, stack.indexOf(')'))
+        });
+      }
+
+      return newState;
+    });
+  }, []);
 
   // Load saved spaces asynchronously on mount
   useEffect(() => {
@@ -86,7 +107,10 @@ const App: React.FC = () => {
 
         const saved = await loadSpaces();
         if (saved) {
+          console.log('[App] Setting initial spaces from saved data');
           setSpaces(saved);
+        } else {
+          console.log('[App] No saved data, using INITIAL_SPACES');
         }
       } catch (error) {
         console.error('[App] Failed to load spaces:', error);
@@ -131,14 +155,20 @@ const App: React.FC = () => {
   }, [spaces]);
 
   // Helper to update items in the current space
-  const updateItems = useCallback((newItems: SpatialItem[]) => {
-    setSpaces(prev => ({
-      ...prev,
-      [activeSpaceId]: {
-        ...prev[activeSpaceId],
-        items: newItems,
-      }
-    }));
+  // Accepts either a full array OR a function that transforms current items
+  // Using function form prevents stale closure bugs (e.g., Canvas using old items after delete)
+  const updateItems = useCallback((updater: SpatialItem[] | ((currentItems: SpatialItem[]) => SpatialItem[])) => {
+    setSpaces(prev => {
+      const currentItems = prev[activeSpaceId]?.items || [];
+      const newItems = typeof updater === 'function' ? updater(currentItems) : updater;
+      return {
+        ...prev,
+        [activeSpaceId]: {
+          ...prev[activeSpaceId],
+          items: newItems,
+        }
+      };
+    });
   }, [activeSpaceId]);
 
   // Helper to analyze an image and update its metadata
@@ -242,10 +272,10 @@ const App: React.FC = () => {
             }
         };
 
-        // CRITICAL: Save IMMEDIATELY and SYNCHRONOUSLY on delete
+        // CRITICAL: Save IMMEDIATELY on delete
         // This prevents any other operations from restoring the deleted items
-        console.log('[App] IMMEDIATE SYNC save after delete');
-        saveSpaces(newSpaces);
+        console.log('[App] IMMEDIATE save after delete');
+        saveSpaces(newSpaces).catch(err => console.error('[App] Delete save failed:', err));
 
         return newSpaces;
     });

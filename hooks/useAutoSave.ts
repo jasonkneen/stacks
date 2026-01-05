@@ -6,6 +6,12 @@ export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = tr
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousSpacesRef = useRef<string>('');
   const renderCountRef = useRef(0);
+  const spacesRef = useRef(spaces);
+
+  // Always keep ref up-to-date with latest spaces
+  useEffect(() => {
+    spacesRef.current = spaces;
+  }, [spaces]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -31,10 +37,12 @@ export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = tr
       }
 
       // Debounce saves (500ms delay)
+      // CRITICAL: Use spacesRef.current to get LATEST state, not closure
       saveTimeoutRef.current = setTimeout(() => {
         console.log('[useAutoSave] Executing save now (render #' + renderCountRef.current + ')');
-        saveSpaces(spaces);
-        previousSpacesRef.current = currentSpaces;
+        const latestSpaces = spacesRef.current;
+        saveSpaces(latestSpaces).catch(err => console.error('[useAutoSave] Save failed:', err));
+        previousSpacesRef.current = JSON.stringify(latestSpaces);
         renderCountRef.current = 0; // Reset counter after successful save
       }, 500);
     }
