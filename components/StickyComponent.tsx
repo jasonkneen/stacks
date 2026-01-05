@@ -17,7 +17,7 @@ export const StickyComponent: React.FC<Props> = ({ item, onChange }) => {
   return (
     <div className={`w-full h-full p-4 flex flex-col transition-colors duration-300 ${bgColor}`}>
       <textarea
-        className={`w-full h-full bg-transparent resize-none border-none outline-none font-handwriting text-lg leading-snug ${placeholderColor}`}
+        className={`w-full h-full bg-transparent resize-none border-none outline-none font-handwriting text-base leading-snug uppercase ${placeholderColor}`}
         value={item.content}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Write a thought..."
