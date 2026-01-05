@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Send, Sparkles, ChevronDown, Image as ImageIcon, FileText, StickyNote, X } from 'lucide-react';
 
 export type AIResponseFormat = 'text' | 'sticky' | 'note' | 'image' | 'document';
 
@@ -13,12 +13,19 @@ export interface AIResponse {
   };
 }
 
+export interface AIOptions {
+  outputType?: 'auto' | 'sticky' | 'note' | 'image';
+  imageResolution?: '512x512' | '1024x1024' | '1024x1792' | '1792x1024';
+  imageStyle?: 'natural' | 'vivid';
+}
+
 interface Props {
   position: { x: number; y: number };
   placeholder?: string;
   contextPrompt?: string;
-  onSubmit: (prompt: string) => void;
+  onSubmit: (prompt: string, options?: AIOptions) => void;
   onClose: () => void;
+  initialExpanded?: boolean;
 }
 
 // System prompt for the AI to understand output formats
@@ -114,14 +121,63 @@ export const parseAIResponse = (rawResponse: string): AIResponse[] => {
   return responses;
 };
 
+// Detect if prompt is image-related
+const detectImagePrompt = (prompt: string): boolean => {
+  const imageKeywords = [
+    'generate image', 'create image', 'make image', 'draw', 'paint',
+    'generate a picture', 'create a picture', 'make a picture',
+    'generate an image', 'create an image', 'make an image',
+    'image of', 'picture of', 'illustration of', 'photo of',
+    'visualize', 'render', 'design a', 'sketch',
+    // Image transformation keywords
+    'color this', 'colour this', 'colorize', 'colourize', 'add color', 'add colour',
+    'fill in', 'color in', 'colour in', 'make it colorful', 'make it colourful',
+    'transform this', 'edit this image', 'modify this image', 'change this image',
+    'stylize', 'restyle', 'reimagine', 'recreate'
+  ];
+  const lowerPrompt = prompt.toLowerCase();
+  return imageKeywords.some(kw => lowerPrompt.includes(kw));
+};
+
+// Detect if prompt is asking for ideas/brainstorming
+const detectBrainstormPrompt = (prompt: string): boolean => {
+  const keywords = [
+    'ideas', 'brainstorm', 'suggest', 'give me', 'list of',
+    'options for', 'alternatives', 'inspiration'
+  ];
+  const lowerPrompt = prompt.toLowerCase();
+  return keywords.some(kw => lowerPrompt.includes(kw));
+};
+
 export const AIChat: React.FC<Props> = ({
   position,
   placeholder = "Ask AI...",
   onSubmit,
-  onClose
+  onClose,
+  initialExpanded = false
 }) => {
   const [prompt, setPrompt] = useState('');
+  const [isExpanded, setIsExpanded] = useState(initialExpanded);
+  const [options, setOptions] = useState<AIOptions>({
+    outputType: 'auto',
+    imageResolution: '1024x1024',
+    imageStyle: 'natural'
+  });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Detect prompt type
+  const detectedType = useMemo(() => {
+    if (detectImagePrompt(prompt)) return 'image';
+    if (detectBrainstormPrompt(prompt)) return 'sticky';
+    return 'auto';
+  }, [prompt]);
+
+  // Auto-expand when image prompt detected
+  useEffect(() => {
+    if (detectedType === 'image' && !isExpanded) {
+      setIsExpanded(true);
+    }
+  }, [detectedType]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -138,7 +194,14 @@ export const AIChat: React.FC<Props> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
-    onSubmit(prompt);
+    onSubmit(prompt, { ...options, outputType: detectedType !== 'auto' ? detectedType : options.outputType });
+  };
+
+  const outputTypeIcons = {
+    auto: <Sparkles size={14} />,
+    sticky: <StickyNote size={14} />,
+    note: <FileText size={14} />,
+    image: <ImageIcon size={14} />
   };
 
   return (
@@ -158,26 +221,119 @@ export const AIChat: React.FC<Props> = ({
           transform: 'translate(-50%, -100%) translateY(-16px)'
         }}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-full flex items-center gap-3 px-5 py-3 shadow-lg min-w-[400px]">
-            <Sparkles size={18} className="text-gray-700 flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={placeholder}
-              className="flex-1 bg-transparent text-gray-800 placeholder-gray-500 outline-none text-sm"
-            />
-            <button
-              type="submit"
-              disabled={!prompt.trim()}
-              className="p-2 rounded-full bg-gray-800/10 hover:bg-gray-800/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send size={18} className="text-gray-800" />
-            </button>
-          </div>
-        </form>
+        <div className="bg-white/90 backdrop-blur-xl border border-white/60 rounded-2xl shadow-2xl overflow-hidden min-w-[420px]">
+          {/* Main Input Row */}
+          <form onSubmit={handleSubmit}>
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Sparkles size={18} className="text-blue-600 flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={placeholder}
+                className="flex-1 bg-transparent text-gray-800 placeholder-gray-400 outline-none text-sm"
+              />
+
+              {/* Expand/Collapse Button */}
+              <button
+                type="button"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-500'}`}
+              >
+                <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+              </button>
+
+              <button
+                type="submit"
+                disabled={!prompt.trim()}
+                className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send size={16} className="text-white" />
+              </button>
+            </div>
+          </form>
+
+          {/* Expanded Options Panel */}
+          {isExpanded && (
+            <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50">
+              {/* Output Type Selector */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-medium text-gray-500 w-16">Output:</span>
+                <div className="flex gap-1">
+                  {(['auto', 'sticky', 'note', 'image'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setOptions(o => ({ ...o, outputType: type }))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        (detectedType !== 'auto' ? detectedType : options.outputType) === type
+                          ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
+                          : 'bg-white text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {outputTypeIcons[type]}
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Image-specific options */}
+              {(detectedType === 'image' || options.outputType === 'image') && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500 w-16">Size:</span>
+                    <div className="flex gap-1">
+                      {(['512x512', '1024x1024', '1024x1792', '1792x1024'] as const).map((res) => (
+                        <button
+                          key={res}
+                          type="button"
+                          onClick={() => setOptions(o => ({ ...o, imageResolution: res }))}
+                          className={`px-2 py-1 rounded-lg text-xs font-medium transition-all ${
+                            options.imageResolution === res
+                              ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300'
+                              : 'bg-white text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          {res === '1024x1792' ? 'Portrait' : res === '1792x1024' ? 'Landscape' : res}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500 w-16">Style:</span>
+                    <div className="flex gap-1">
+                      {(['natural', 'vivid'] as const).map((style) => (
+                        <button
+                          key={style}
+                          type="button"
+                          onClick={() => setOptions(o => ({ ...o, imageStyle: style }))}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            options.imageStyle === style
+                              ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                              : 'bg-white text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          {style.charAt(0).toUpperCase() + style.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Detected prompt hint */}
+              {detectedType !== 'auto' && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-blue-600">
+                  {outputTypeIcons[detectedType]}
+                  <span>Detected: {detectedType} generation</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, FolderPlus, FolderOpen, Layers, LayoutGrid, Droplet } from 'lucide-react';
+import { Trash2, FolderPlus, FolderOpen, Layers, LayoutGrid, Droplet, Sparkles } from 'lucide-react';
 import { SpatialItem, LayoutType, SortOption } from '../types';
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   onGroupToStack: (ids: Set<string>) => void;
   onUngroup: (folderId: string) => void;
   onArrangeSelection: (layoutType: LayoutType, sortBy: SortOption) => void;
+  onAIChat: (ids: Set<string>, position: { x: number; y: number }) => void;
   layoutType: LayoutType;
   sortBy: SortOption;
 }
@@ -31,6 +32,7 @@ export const ContextToolbar: React.FC<Props> = ({
   onGroupToStack,
   onUngroup,
   onArrangeSelection,
+  onAIChat,
   layoutType,
   sortBy
 }) => {
@@ -116,6 +118,19 @@ export const ContextToolbar: React.FC<Props> = ({
           title="Auto-arrange selected items"
         >
           <LayoutGrid size={20} />
+        </button>
+
+        {/* AI Chat */}
+        <button
+          onClick={(e) => {
+            // Get position for the popup (centered above the toolbar)
+            const rect = e.currentTarget.getBoundingClientRect();
+            onAIChat(selection, { x: window.innerWidth / 2, y: rect.top - 20 });
+          }}
+          className="p-2.5 rounded-2xl text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 transition-all active:scale-95 duration-150"
+          title="Ask AI about selection"
+        >
+          <Sparkles size={20} />
         </button>
 
         {/* Delete */}

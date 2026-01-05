@@ -291,13 +291,12 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                     Image Generation
                   </label>
                   <select className={inputClass}>
+                    <optgroup label="Google Gemini">
+                      <option selected>gemini-2.5-flash-image (Nano Banana)</option>
+                      <option>gemini-3-pro-image-preview (Nano Banana Pro)</option>
+                    </optgroup>
                     <optgroup label="OpenAI">
                       <option>gpt-image-1.5</option>
-                      <option>dall-e-3</option>
-                    </optgroup>
-                    <optgroup label="Google Gemini">
-                      <option selected>gemini-3-flash</option>
-                      <option>gemini-3-pro</option>
                     </optgroup>
                   </select>
                 </div>

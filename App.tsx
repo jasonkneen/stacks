@@ -8,7 +8,7 @@ import { NameEditor } from './components/NameEditor';
 import { SpaceOverview } from './components/SpaceOverview';
 import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
-import { AIChat, AIResponse, AI_FORMAT_SYSTEM_PROMPT, parseAIResponse } from './components/AIChat';
+import { AIChat, AIResponse, AIOptions, AI_FORMAT_SYSTEM_PROMPT, parseAIResponse } from './components/AIChat';
 import { AutoArrangeButton } from './components/AutoArrangeButton';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
@@ -142,7 +142,12 @@ const App: React.FC = () => {
   const [showOverview, setShowOverview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [aiPromptState, setAIPromptState] = useState<{ itemId: string; position: { x: number; y: number } } | null>(null);
+  const [aiPromptState, setAIPromptState] = useState<{
+    itemId?: string;
+    itemIds?: Set<string>;
+    position: { x: number; y: number };
+    mode: 'single' | 'selection';
+  } | null>(null);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
   // MCP Client for AI tools
@@ -632,10 +637,19 @@ const App: React.FC = () => {
     }
   }, [activeSpace.items]);
 
-  // Handle AI-generated content from connection handle
-  const handleAIGeneration = useCallback(async (sourceItemId: string, prompt: string) => {
-    const sourceItem = activeSpace.items.find(i => i.id === sourceItemId);
-    if (!sourceItem) return;
+  // Handle AI-generated content from connection handle or selection
+  const handleAIGeneration = useCallback(async (
+    sourceItemId: string | string[],
+    prompt: string,
+    options?: AIOptions
+  ) => {
+    // Get source items (single or multiple)
+    const sourceIds = Array.isArray(sourceItemId) ? sourceItemId : [sourceItemId];
+    const sourceItems = activeSpace.items.filter(i => sourceIds.includes(i.id));
+    if (sourceItems.length === 0) return;
+
+    // Use first item as primary for positioning
+    const sourceItem = sourceItems[0];
 
     // Create placeholder note
     const newItemId = `ai-${Date.now()}`;
@@ -671,23 +685,24 @@ const App: React.FC = () => {
 
     try {
       // Use AI provider with MCP tools when available
-      const { generateTextStream, generateWithTools, generateWithVision } = await import('./utils/aiProvider');
+      const { generateTextStream, getLanguageModel, AIProvider } = await import('./utils/aiProvider');
+      const { streamText } = await import('ai');
 
-      // Prepare context based on item type
-      const isVisual = sourceItem.type === 'image' || sourceItem.type === 'video';
-      const contextText = isVisual
-        ? (sourceItem.metadata?.description as string || 'Visual content')
-        : sourceItem.content.replace(/<[^>]*>/g, ' ').trim();
+      // Get provider from settings
+      const selectedProvider = (localStorage.getItem('ai-provider') || 'google') as AIProvider;
 
-      const hasTools = mcp.connected && mcp.tools.length > 0;
+      // Prepare context from all source items
+      const contextParts = sourceItems.map(item => {
+        const isVisual = item.type === 'image' || item.type === 'video';
+        return isVisual
+          ? `[${item.type}: ${item.metadata?.description as string || 'Visual content'}]`
+          : item.content.replace(/<[^>]*>/g, ' ').trim();
+      });
+      const contextText = contextParts.join('\n\n');
 
-      // Build tool definitions for Gemini
-      const toolDefs = hasTools ? mcp.tools.map(t => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema,
-        serverId: t.serverId,
-      })) : [];
+      // Disable MCP tools for AI chat - they cause schema compatibility issues
+      const hasTools = false;
+      const toolDefs: any[] = [];
 
       // Tool call handler
       const handleToolCall = async (serverId: string, toolName: string, args: Record<string, any>) => {
@@ -734,50 +749,82 @@ const App: React.FC = () => {
         });
       };
 
-      if (hasTools) {
-        // Use tool-enabled generation
-        const systemPrompt = `${AI_FORMAT_SYSTEM_PROMPT}
+      // For image generation, use image model directly with AI SDK
+      if (options?.outputType === 'image') {
+        console.log('[App] Image mode detected, using gemini-2.5-flash-image');
 
-You are an AI assistant with access to external tools. Use them when helpful to answer the user's request. Available tools: ${mcp.tools.map(t => t.name).join(', ')}.
+        const { generateImage } = await import('./utils/imageGeneration');
 
-Remember to wrap your responses in the appropriate format tags ([STICKY], [NOTE], [IMAGE], etc.).`;
+        updateContent('🎨 Generating image...');
 
-        await generateWithTools(
-          `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`,
-          toolDefs,
-          handleToolCall,
-          updateContent,
-          { systemPrompt, maxToolCalls: 5 }
-        );
+        try {
+          // Get source image if the selected item is an image (for image-to-image)
+          const sourceImageData = sourceItem.type === 'image' ? sourceItem.content : undefined;
+
+          const imageUrl = await generateImage(prompt, {
+            resolution: options?.imageResolution,
+            style: options?.imageStyle,
+            provider: selectedProvider,
+            sourceImage: sourceImageData
+          });
+
+          console.log('[App] Image generated, creating image item');
+
+          // Create image item directly
+          const imageItem: SpatialItem = {
+            id: newItemId,
+            type: 'image',
+            x: sourceItem.x + sourceItem.w + 100,
+            y: sourceItem.y,
+            w: 300,
+            h: 250,
+            zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+            rotation: (Math.random() - 0.5) * 4,
+            content: imageUrl,
+            metadata: {
+              prompt,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            }
+          };
+
+          setSpaces(prev => ({
+            ...prev,
+            [activeSpaceId]: {
+              ...prev[activeSpaceId],
+              items: [...prev[activeSpaceId].items.filter(i => i.id !== newItemId), imageItem]
+            }
+          }));
+
+          return; // Done
+        } catch (imgError) {
+          console.error('[App] Image generation failed:', imgError);
+          updateContent(`\n\nImage generation failed: ${imgError instanceof Error ? imgError.message : 'Unknown error'}`);
+          // Fall through to mark as complete with error
+        }
       } else {
-        // Fallback to simple streaming
-        const fullPrompt = `Based on the context: "${contextText}"
-
-User request: ${prompt}
-
-Please provide a thoughtful response in HTML format with proper paragraph tags.`;
-
-        await generateTextStream(fullPrompt, updateContent, { systemPrompt: AI_FORMAT_SYSTEM_PROMPT });
+        // Text/note/sticky generation
+        const fullPrompt = `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`;
+        await generateTextStream(fullPrompt, updateContent, { systemPrompt: AI_FORMAT_SYSTEM_PROMPT, provider: selectedProvider });
       }
 
-      // Parse final response for format tags and create appropriate items
+      // Parse final response for format tags
       const responses = parseAIResponse(fullContent);
 
-      if (responses.length > 1) {
-        // Multiple items - replace placeholder with all generated items
+      if (responses.length > 1 || responses[0].format !== 'text') {
+        // Multiple items or special format - replace placeholder
         const generatedItems = responses.map((resp, idx) => createItemFromAIResponse(resp, sourceItem, idx));
 
         setSpaces(prev => ({
           ...prev,
           [activeSpaceId]: {
             ...prev[activeSpaceId],
-            // Remove placeholder, add generated items
             items: [...prev[activeSpaceId].items.filter(i => i.id !== newItemId), ...generatedItems],
             connections: [
               ...(prev[activeSpaceId].connections || []),
               ...generatedItems.map(item => ({
                 id: `conn-${Date.now()}-${item.id}`,
-                from: sourceItemId,
+                from: sourceIds[0],
                 to: item.id
               }))
             ]
@@ -1448,7 +1495,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 );
               }}
               onAIPromptStart={(itemId, position) => {
-                setAIPromptState({ itemId, position });
+                setAIPromptState({ itemId, position, mode: 'single' });
               }}
               onCameraChange={(camera) => {
                 setSpaces(prev => ({
@@ -1475,6 +1522,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           onArrangeSelection={(layoutType, sortBy) => {
             // Arrange only selected items
             handleAutoArrange(layoutType, sortBy, selection);
+          }}
+          onAIChat={(ids, position) => {
+            setAIPromptState({ itemIds: ids, position, mode: 'selection' });
           }}
           layoutType={activeSpace.layoutType || 'grid'}
           sortBy={activeSpace.sortBy || 'updated'}
@@ -1738,8 +1788,32 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
         />
       )}
 
-      {/* AI Chat Popup (from connection handles) */}
+      {/* AI Chat Popup (from connection handles or selection) */}
       {aiPromptState && (() => {
+        // Handle both single item and selection modes
+        if (aiPromptState.mode === 'selection' && aiPromptState.itemIds) {
+          const selectedItems = activeSpace.items.filter(i => aiPromptState.itemIds!.has(i.id));
+          const previewText = selectedItems.length === 1
+            ? (selectedItems[0].type === 'image' || selectedItems[0].type === 'video'
+                ? `${selectedItems[0].type}: ${selectedItems[0].metadata?.description || 'visual content'}`
+                : selectedItems[0].content.replace(/<[^>]*>/g, '').slice(0, 30) + '...')
+            : `${selectedItems.length} selected items`;
+
+          return (
+            <AIChat
+              position={aiPromptState.position}
+              placeholder={`Ask AI about: ${previewText}...`}
+              initialExpanded={false}
+              onSubmit={(prompt, options) => {
+                handleAIGeneration(Array.from(aiPromptState.itemIds!), prompt, options);
+                setAIPromptState(null);
+              }}
+              onClose={() => setAIPromptState(null)}
+            />
+          );
+        }
+
+        // Single item mode
         const sourceItem = activeSpace.items.find(i => i.id === aiPromptState.itemId);
         const sourcePreview = sourceItem
           ? (sourceItem.type === 'image' || sourceItem.type === 'video'
@@ -1750,8 +1824,11 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           <AIChat
             position={aiPromptState.position}
             placeholder={`Ask AI about: ${sourcePreview || 'this item'}...`}
-            onSubmit={(prompt) => {
-              handleAIGeneration(aiPromptState.itemId, prompt);
+            initialExpanded={false}
+            onSubmit={(prompt, options) => {
+              if (aiPromptState.itemId) {
+                handleAIGeneration(aiPromptState.itemId, prompt, options);
+              }
               setAIPromptState(null);
             }}
             onClose={() => setAIPromptState(null)}
