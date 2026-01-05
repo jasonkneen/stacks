@@ -124,7 +124,7 @@ const renderPreview = (item: SpatialItem) => {
             );
         case 'sticky':
             return (
-                <div className="w-full h-full bg-yellow-200 p-4 relative">
+                <div className={`w-full h-full ${item.color || 'bg-yellow-200'} p-4 relative`}>
                     <div className="text-[10px] leading-relaxed font-handwriting text-gray-800 opacity-80 line-clamp-6 select-none">
                         {item.content}
                     </div>

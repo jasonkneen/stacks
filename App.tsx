@@ -1225,6 +1225,20 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
             setShowOverview(false);
             setSelection(new Set());
           }}
+          onDeleteSpace={(spaceId) => {
+            setSpaces(prev => {
+              const { [spaceId]: deleted, ...remaining } = prev;
+              return remaining;
+            });
+            // If deleting active space, switch to first remaining top-level space
+            if (spaceId === activeSpaceId) {
+              const remainingTopLevel = topLevelSpaces.filter(s => s.id !== spaceId);
+              if (remainingTopLevel.length > 0) {
+                setActiveSpaceId(remainingTopLevel[0].id);
+              }
+            }
+            setSelection(new Set());
+          }}
         />
       ) : (
         <div className="w-full h-full">

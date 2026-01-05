@@ -1,17 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Space, SpatialItem } from '../types';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 interface Props {
   spaces: Space[];
   activeSpaceId: string;
   onSelectSpace: (spaceId: string) => void;
   onCreateSpace: () => void;
+  onDeleteSpace: (spaceId: string) => void;
 }
 
-export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelectSpace, onCreateSpace }) => {
+export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelectSpace, onCreateSpace, onDeleteSpace }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeCardRef = useRef<HTMLDivElement>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Auto-scroll to active space
   useEffect(() => {
@@ -82,13 +84,25 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
         <div
           key={space.id}
           ref={space.id === activeSpaceId ? activeCardRef : null}
-          className={`relative cursor-pointer transition-all duration-300 flex-shrink-0 ${
+          className={`relative cursor-pointer transition-all duration-300 flex-shrink-0 group/card ${
             space.id === activeSpaceId
               ? 'scale-105'
               : 'scale-100 hover:scale-102'
           }`}
           onClick={() => onSelectSpace(space.id)}
         >
+          {/* Delete Button - Top Right */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteConfirm(space.id);
+            }}
+            className="absolute -top-2 -right-2 z-10 w-8 h-8 bg-red-500/90 backdrop-blur-md rounded-full shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover/card:opacity-100 flex items-center justify-center"
+            title="Delete space"
+          >
+            <X size={16} className="text-white" />
+          </button>
+
           {/* Space Card */}
           <div
             className={`w-80 h-96 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ${
@@ -146,6 +160,39 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200]"
+            onClick={() => setDeleteConfirm(null)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200/50 p-6 min-w-[320px]">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Space?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              This will permanently delete "{spaces.find(s => s.id === deleteConfirm)?.name}" and all its contents.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteSpace(deleteConfirm);
+                  setDeleteConfirm(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
