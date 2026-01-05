@@ -48,9 +48,12 @@ export const loadSpaces = (): Record<string, Space> | null => {
       const totalItems = Object.values(spaces).reduce((sum, space) => sum + (space as Space).items.length, 0);
       console.log('[storage] Loading spaces:', {
         spaceCount: Object.keys(spaces).length,
+        spaceIds: Object.keys(spaces),
         totalItems,
         timestamp: new Date().toISOString()
       });
+    } else {
+      console.log('[storage] No saved spaces found, will use INITIAL_SPACES');
     }
     return spaces;
   } catch (e) {

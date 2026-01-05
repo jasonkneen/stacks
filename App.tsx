@@ -10,7 +10,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
-import { useUndoRedo } from './hooks/useUndoRedo';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
@@ -160,17 +159,9 @@ const getFitToViewParams = (items: SpatialItem[]) => {
 
 const App: React.FC = () => {
   // Load from localStorage or use initial data
-  // Undo/Redo with 50-step history
-  const {
-    state: spaces,
-    setState: setSpaces,
-    undo,
-    redo,
-    canUndo,
-    canRedo
-  } = useUndoRedo<Record<string, Space>>({
-    maxHistory: 50,
-    initialState: () => loadSpaces() || INITIAL_SPACES
+  const [spaces, setSpaces] = useState<Record<string, Space>>(() => {
+    const saved = loadSpaces();
+    return saved || INITIAL_SPACES;
   });
 
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
@@ -196,11 +187,13 @@ const App: React.FC = () => {
   // To trigger camera moves programmatically in Canvas
   const [cameraOverride, setCameraOverride] = useState<{ x: number, y: number, zoom: number, id: string } | undefined>(undefined);
 
-  const activeSpace = spaces[activeSpaceId];
+  // Safety check: ensure spaces is valid and has activeSpaceId
+  const activeSpace = spaces?.[activeSpaceId] || INITIAL_SPACES[ROOT_SPACE_ID];
 
   // Get top-level spaces (no parent) for horizontal navigation
   const topLevelSpaces = useMemo(() => {
-    return Object.values(spaces).filter(s => s.parentId === null);
+    if (!spaces) return [INITIAL_SPACES[ROOT_SPACE_ID]];
+    return Object.values(spaces).filter(s => s?.parentId === null);
   }, [spaces]);
 
   // Helper to update items in the current space
@@ -1041,17 +1034,6 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
         } else if (activeSpace.parentId) {
           handleBack();
         }
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-          // Undo/Redo
-          const activeTag = document.activeElement?.tagName;
-          if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && !(document.activeElement as HTMLElement)?.isContentEditable) {
-            e.preventDefault();
-            if (e.shiftKey) {
-              redo();
-            } else {
-              undo();
-            }
-          }
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && selection.size > 0) {
           // Check if not editing text
           const activeTag = document.activeElement?.tagName;
@@ -1091,7 +1073,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId, undo, redo]);
+  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId]);
 
   return (
     <div className="relative w-full h-full bg-gray-50 overflow-hidden text-gray-900">
