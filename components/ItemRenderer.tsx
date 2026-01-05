@@ -13,7 +13,7 @@ interface ItemRendererProps {
   isResizing?: boolean;
   dragTilt?: number;
   onMouseDown: (e: React.MouseEvent) => void;
-  onResizeStart: (e: React.MouseEvent, id: string) => void;
+  onResizeStart?: (e: React.MouseEvent, id: string) => void;
   onNavigate: (spaceId: string) => void;
   onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
   onOpenNote: (item: SpatialItem, rect: DOMRect) => void;
@@ -21,7 +21,7 @@ interface ItemRendererProps {
   onEditFolderName: (item: SpatialItem) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onHover: (id: string | null) => void;
-  onConnectStart: (e: React.MouseEvent, id: string) => void;
+  onConnectStart?: (e: React.MouseEvent, id: string) => void;
   onAIPromptStart: (e: React.MouseEvent, itemId: string, position: { x: number; y: number }) => void;
 }
 
@@ -102,12 +102,12 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       onMouseEnter={() => onHover(item.id)}
       onMouseLeave={() => onHover(null)}
     >
-      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : 'overflow-hidden bg-white'}`}>
+      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : 'overflow-hidden bg-white border border-gray-100'}`}>
           {renderContent()}
       </div>
 
       {/* Connection Handles (Visible on Group Hover) */}
-      {!isDragging && !isResizing && (
+      {!isDragging && !isResizing && onConnectStart && (
           <>
             {/* Top */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-[60]">
@@ -218,7 +218,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       )}
 
       {/* Resize Handle - Bottom Right Corner */}
-      {!isDragging && (
+      {!isDragging && onResizeStart && (
         <div
           className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-[70] opacity-0 group-hover/item:opacity-100 transition-opacity"
           onMouseDown={(e) => onResizeStart(e, item.id)}

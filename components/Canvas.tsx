@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { SpatialItem, Connection } from '../types';
+import { SpatialItem, Connection, LayoutType, SortOption } from '../types';
 import { ItemRenderer } from './ItemRenderer';
 
 interface CanvasProps {
@@ -9,7 +9,7 @@ interface CanvasProps {
   cameraOverride?: { x: number; y: number; zoom: number; id: string }; // id acts as a trigger
   selection: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
-  onUpdateItems: (items: SpatialItem[]) => void;
+  onUpdateItems: (updater: SpatialItem[] | ((currentItems: SpatialItem[]) => SpatialItem[])) => void;
   onNavigate: (spaceId: string) => void;
   onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
   onOpenNote: (item: SpatialItem, rect: DOMRect) => void;
@@ -22,7 +22,140 @@ interface CanvasProps {
   onMarkManuallyPositioned: (ids: string[]) => void;
   onAIPromptStart: (itemId: string, position: { x: number; y: number }) => void;
   onCameraChange?: (camera: { x: number; y: number; zoom: number }) => void;
+  onAutoArrange?: (layoutType: LayoutType, sortBy: SortOption, selectedIds: Set<string>) => void;
 }
+
+// Sort items by the given option
+const sortItems = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+  return [...items].sort((a, b) => {
+    switch (sortBy) {
+      case 'updated':
+        return (b.metadata?.updatedAt || 0) - (a.metadata?.updatedAt || 0);
+      case 'added':
+        return (b.metadata?.createdAt || 0) - (a.metadata?.createdAt || 0);
+      case 'name':
+        return (a.content || '').localeCompare(b.content || '');
+      case 'type':
+        return a.type.localeCompare(b.type);
+      default:
+        return 0;
+    }
+  });
+};
+
+// Grid Layout: Regular grid with uniform spacing
+const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+  if (items.length === 0) return items;
+
+  const sorted = sortItems(items, sortBy);
+
+  const GRID_GAP = 40;
+  const ITEM_SIZE = 220;
+
+  // Calculate grid dimensions
+  const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
+  const rows = Math.ceil(items.length / COLS);
+
+  const totalWidth = COLS * ITEM_SIZE + (COLS - 1) * GRID_GAP;
+  const totalHeight = rows * ITEM_SIZE + (rows - 1) * GRID_GAP;
+
+  const startX = -totalWidth / 2;
+  const startY = -totalHeight / 2;
+
+  return sorted.map((item, index) => {
+    const col = index % COLS;
+    const row = Math.floor(index / COLS);
+    return {
+      ...item,
+      x: startX + col * (ITEM_SIZE + GRID_GAP),
+      y: startY + row * (ITEM_SIZE + GRID_GAP),
+      w: ITEM_SIZE,
+      h: ITEM_SIZE,
+      rotation: 0,
+    };
+  });
+};
+
+// Bento Layout: Masonry-style with varied sizes
+const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+  if (items.length === 0) return items;
+
+  const sorted = sortItems(items, sortBy);
+
+  const GAP = 20;
+  const SMALL = 180;
+  const LARGE = 380;
+  const COLS = 3;
+
+  // Track column heights for masonry layout
+  const colHeights = new Array(COLS).fill(0);
+
+  const arranged = sorted.map((item, index) => {
+    // Vary sizes: every 4th item is large
+    const isLarge = index % 4 === 0;
+    const w = isLarge ? LARGE : SMALL;
+    const h = isLarge ? LARGE : SMALL;
+
+    // Find shortest column
+    const minHeight = Math.min(...colHeights);
+    const col = colHeights.indexOf(minHeight);
+
+    // Position in that column
+    const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
+    const y = colHeights[col];
+
+    // Update column height
+    colHeights[col] += h + GAP;
+
+    return {
+      ...item,
+      x,
+      y,
+      w,
+      h,
+      rotation: 0,
+    };
+  });
+
+  // Center vertically
+  const maxHeight = Math.max(...colHeights);
+  return arranged.map(item => ({
+    ...item,
+    y: item.y - maxHeight / 2,
+  }));
+};
+
+// Random Layout: Scattered with slight rotation for natural feel
+const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+  if (items.length === 0) return items;
+
+  const sorted = sortItems(items, sortBy);
+
+  const SPREAD = 400;
+  const SIZE_MIN = 160;
+  const SIZE_MAX = 280;
+
+  // Use seeded random for reproducibility based on item count
+  let seed = items.length;
+  const seededRandom = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+
+  return sorted.map((item) => {
+    const angle = seededRandom() * Math.PI * 2;
+    const distance = seededRandom() * SPREAD;
+
+    return {
+      ...item,
+      x: Math.cos(angle) * distance,
+      y: Math.sin(angle) * distance,
+      w: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+      h: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+      rotation: (seededRandom() - 0.5) * 10, // -5 to +5 degrees
+    };
+  });
+};
 
 export const Canvas: React.FC<CanvasProps> = ({
   items,
@@ -43,7 +176,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onDropFiles,
   onMarkManuallyPositioned,
   onAIPromptStart,
-  onCameraChange
+  onCameraChange,
+  onAutoArrange,
 }) => {
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
@@ -227,13 +361,15 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleItemMouseDown = (e: React.MouseEvent, itemId: string) => {
     e.stopPropagation();
-    
-    // Bring to front
-    const maxZ = Math.max(...items.map(i => i.zIndex), 0);
-    const updatedItems = items.map(item => 
-        item.id === itemId ? { ...item, zIndex: maxZ + 1 } : item
-    );
-    onUpdateItems(updatedItems);
+
+    // Bring to front - use functional update to avoid stale closure bugs
+    // (e.g., if an item was just deleted, items prop might be stale)
+    onUpdateItems(currentItems => {
+      const maxZ = Math.max(...currentItems.map(i => i.zIndex), 0);
+      return currentItems.map(item =>
+          item.id === itemId ? { ...item, zIndex: maxZ + 1 } : item
+      );
+    });
 
     setDraggingId(itemId);
     setLastMousePos({ x: e.clientX, y: e.clientY });
@@ -304,10 +440,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         const newW = Math.max(80, startData.w + scaledDeltaX);
         const newH = Math.max(80, startData.h + scaledDeltaY);
 
-        const updatedItems = items.map(item =>
-            item.id === resizingId ? { ...item, w: newW, h: newH } : item
+        // Use functional update to avoid stale closure
+        onUpdateItems(currentItems =>
+            currentItems.map(item =>
+                item.id === resizingId ? { ...item, w: newW, h: newH } : item
+            )
         );
-        onUpdateItems(updatedItems);
         return;
     }
 
@@ -326,16 +464,19 @@ export const Canvas: React.FC<CanvasProps> = ({
         const targetTilt = deltaX * 0.4;
         setDragTilt(Math.max(Math.min(targetTilt, 12), -12));
 
+        // FIX: Divide by zoom ONCE, not compounding
         const worldDeltaX = deltaX / camera.zoom;
         const worldDeltaY = deltaY / camera.zoom;
 
-        const updatedItems = items.map(item => {
-            if (item.id === draggingId || (selection.has(item.id) && selection.has(draggingId))) {
-                return { ...item, x: item.x + worldDeltaX, y: item.y + worldDeltaY };
-            }
-            return item;
-        });
-        onUpdateItems(updatedItems);
+        // Use functional update to avoid stale closure
+        onUpdateItems(currentItems =>
+            currentItems.map(item => {
+                if (item.id === draggingId || (selection.has(item.id) && selection.has(draggingId))) {
+                    return { ...item, x: item.x + worldDeltaX, y: item.y + worldDeltaY };
+                }
+                return item;
+            })
+        );
     } else if (selectionBox) {
         // Lasso Selection Logic
         const currentWorldPos = worldPos;
@@ -395,24 +536,28 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         // --- STACKING DETECTION ---
         const draggedItem = items.find(i => i.id === draggingId);
-        if (draggedItem) {
-             const centerX = draggedItem.x + draggedItem.w / 2;
-             const centerY = draggedItem.y + draggedItem.h / 2;
+        if (draggedItem && hoveredItemId && hoveredItemId !== draggingId) {
+            // Stack with the hovered item
+            onStackItems(draggingId, hoveredItemId);
+        } else if (draggedItem) {
+            // Check overlap by position
+            const centerX = draggedItem.x + draggedItem.w / 2;
+            const centerY = draggedItem.y + draggedItem.h / 2;
 
-             for (const item of items) {
-                 if (item.id === draggingId) continue;
+            for (const item of items) {
+                if (item.id === draggingId) continue;
 
-                 // Check if center of dragged item is inside another item's bounding box
-                 if (
-                     centerX > item.x &&
-                     centerX < item.x + item.w &&
-                     centerY > item.y &&
-                     centerY < item.y + item.h
-                 ) {
-                     onStackItems(draggingId, item.id);
-                     break; // Only stack with one target at a time
-                 }
-             }
+                // Check if center of dragged item is inside another item's bounding box
+                if (
+                    centerX > item.x &&
+                    centerX < item.x + item.w &&
+                    centerY > item.y &&
+                    centerY < item.y + item.h
+                ) {
+                    onStackItems(draggingId, item.id);
+                    break; // Only stack with one target at a time
+                }
+            }
         }
     }
 
@@ -423,7 +568,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     setDraggingId(null);
     setDragTilt(0);
     setSelectionBox(null);
-  }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect]); 
+  }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia]); 
 
   useEffect(() => {
     if (isPanning || draggingId || resizingId || selectionBox || connectingLine) {
@@ -598,8 +743,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             onOpenMedia={(item, rect) => onOpenMedia(item, rect)}
             onOpenNote={(item, rect) => onOpenNote(item, rect)}
             onUpdateContent={(content) => {
-                const updated = items.map(i => i.id === item.id ? { ...i, content } : i);
-                onUpdateItems(updated);
+                // Use functional update to avoid stale closure
+                onUpdateItems(currentItems =>
+                    currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
+                );
             }}
             onEditFolderName={onEditFolderName}
             getSpaceItems={getSpaceItems}

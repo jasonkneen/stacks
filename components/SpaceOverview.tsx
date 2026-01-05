@@ -1,13 +1,15 @@
 import React from 'react';
 import { Space, SpatialItem } from '../types';
+import { Plus } from 'lucide-react';
 
 interface Props {
   spaces: Space[];
   activeSpaceId: string;
   onSelectSpace: (spaceId: string) => void;
+  onCreateSpace: () => void;
 }
 
-export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelectSpace }) => {
+export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelectSpace, onCreateSpace }) => {
   // Render a mini preview of items in a space
   const renderSpacePreview = (space: Space) => {
     if (space.items.length === 0) {
@@ -96,6 +98,36 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
           </div>
         </div>
       ))}
+
+      {/* Ghost Placeholder - New Space */}
+      <div
+        className="relative cursor-pointer transition-all duration-300 hover:scale-102"
+        onClick={onCreateSpace}
+      >
+        {/* Ghost Card with Dashed Border */}
+        <div
+          className="w-80 h-96 rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-2xl bg-transparent"
+          style={{
+            border: '2px dashed rgba(100, 116, 139, 0.3)'
+          }}
+        >
+          {/* Center Plus Icon */}
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="rounded-full bg-gray-200/50 p-6 transition-all duration-300 hover:bg-gray-300/50">
+              <Plus size={48} className="text-gray-400" strokeWidth={2} />
+            </div>
+          </div>
+        </div>
+
+        {/* Badge */}
+        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
+          <div className="bg-gray-900/90 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full shadow-xl">
+            <span className="text-sm font-semibold text-white whitespace-nowrap">
+              New Space
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

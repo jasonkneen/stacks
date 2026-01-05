@@ -90,16 +90,15 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditNa
 
                 {/* Label Badge - Floating below */}
                 <div
-                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-40 cursor-pointer"
+                    className="absolute -bottom-[50px] left-1/2 -translate-x-1/2 z-40 cursor-pointer"
                     onDoubleClick={(e) => {
                         e.stopPropagation();
                         onEditName();
                     }}
                 >
-                    <div className="bg-gray-900/80 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full shadow-xl hover:bg-gray-800/90 transition-colors">
-                        <span className="text-xs font-bold text-white whitespace-nowrap">
-                            {item.content}
-                            <span className="opacity-50 font-normal ml-2">{linkedItems.length} items</span>
+                    <div className="bg-white backdrop-blur-md border border-gray-200 px-3 py-1 rounded-full shadow-xl hover:bg-gray-50 transition-colors">
+                        <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                            {linkedItems.length} items
                         </span>
                     </div>
                 </div>

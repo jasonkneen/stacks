@@ -8,10 +8,11 @@ import { NameEditor } from './components/NameEditor';
 import { SpaceOverview } from './components/SpaceOverview';
 import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
+import { AutoArrangeButton } from './components/AutoArrangeButton';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
 import { loadSpaces, saveSpaces } from './utils/storage';
-import { Space, SpatialItem, Connection } from './types';
+import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
@@ -903,68 +904,137 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
   }, [activeSpaceId]);
 
 
-  // Auto Layout Logic
-  const handleAutoLayout = useCallback(async () => {
-    if (isLayouting || activeSpace.items.length === 0) return;
-    setIsLayouting(true);
+  // Auto Arrange Logic
+  const handleAutoArrange = useCallback((layoutType: LayoutType, sortBy: SortOption, selectedIds: Set<string>) => {
+    if (activeSpace.items.length === 0) return;
 
-    try {
-      // Filter items: only layout non-manually-positioned items
-      const itemsToLayout = activeSpace.items.filter(item => !item.metadata?.manuallyPositioned);
-      const manualItems = activeSpace.items.filter(item => item.metadata?.manuallyPositioned);
+    // Import arrangement functions from Canvas
+    const sortItems = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+      return [...items].sort((a, b) => {
+        switch (sortBy) {
+          case 'updated':
+            return (b.metadata?.updatedAt || 0) - (a.metadata?.updatedAt || 0);
+          case 'added':
+            return (b.metadata?.createdAt || 0) - (a.metadata?.createdAt || 0);
+          case 'name':
+            return (a.content || '').localeCompare(b.content || '');
+          case 'type':
+            return a.type.localeCompare(b.type);
+          default:
+            return 0;
+        }
+      });
+    };
 
-      if (itemsToLayout.length === 0) {
-        setIsLayouting(false);
-        return; // Nothing to layout
-      }
+    const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+      if (items.length === 0) return items;
+      const sorted = sortItems(items, sortBy);
+      const GRID_GAP = 40;
+      const ITEM_SIZE = 220;
+      const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
+      const rows = Math.ceil(items.length / COLS);
+      const totalWidth = COLS * ITEM_SIZE + (COLS - 1) * GRID_GAP;
+      const totalHeight = rows * ITEM_SIZE + (rows - 1) * GRID_GAP;
+      const startX = -totalWidth / 2;
+      const startY = -totalHeight / 2;
+      return sorted.map((item, index) => {
+        const col = index % COLS;
+        const row = Math.floor(index / COLS);
+        return {
+          ...item,
+          x: startX + col * (ITEM_SIZE + GRID_GAP),
+          y: startY + row * (ITEM_SIZE + GRID_GAP),
+          w: ITEM_SIZE,
+          h: ITEM_SIZE,
+          rotation: 0,
+        };
+      });
+    };
 
-      // Construct ELK graph
-      const graph = {
-        id: 'root',
-        layoutOptions: {
-          'elk.algorithm': 'rectpacking',
-          'elk.spacing.nodeNode': '40',
-          'elk.aspectRatio': '1.6',
-        },
-        children: itemsToLayout.map(item => ({
-          id: item.id,
-          width: item.w,
-          height: item.h,
-        }))
+    const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+      if (items.length === 0) return items;
+      const sorted = sortItems(items, sortBy);
+      const GAP = 20;
+      const SMALL = 180;
+      const LARGE = 380;
+      const COLS = 3;
+      const colHeights = new Array(COLS).fill(0);
+      const arranged = sorted.map((item, index) => {
+        const isLarge = index % 4 === 0;
+        const w = isLarge ? LARGE : SMALL;
+        const h = isLarge ? LARGE : SMALL;
+        const minHeight = Math.min(...colHeights);
+        const col = colHeights.indexOf(minHeight);
+        const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
+        const y = colHeights[col];
+        colHeights[col] += h + GAP;
+        return { ...item, x, y, w, h, rotation: 0 };
+      });
+      const maxHeight = Math.max(...colHeights);
+      return arranged.map(item => ({ ...item, y: item.y - maxHeight / 2 }));
+    };
+
+    const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+      if (items.length === 0) return items;
+      const sorted = sortItems(items, sortBy);
+      const SPREAD = 400;
+      const SIZE_MIN = 160;
+      const SIZE_MAX = 280;
+      let seed = items.length;
+      const seededRandom = () => {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
       };
+      return sorted.map((item) => {
+        const angle = seededRandom() * Math.PI * 2;
+        const distance = seededRandom() * SPREAD;
+        return {
+          ...item,
+          x: Math.cos(angle) * distance,
+          y: Math.sin(angle) * distance,
+          w: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+          h: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+          rotation: (seededRandom() - 0.5) * 10,
+        };
+      });
+    };
 
-      const layoutedGraph = await elk.layout(graph);
+    // Apply layout based on type
+    const layout = layoutType === 'grid' ? arrangeGrid :
+                   layoutType === 'bento' ? arrangeBento : arrangeRandom;
 
-      if (layoutedGraph.children) {
-        // Update only the auto-layouted items
-        const layoutedItems = itemsToLayout.map(item => {
-          const node = layoutedGraph.children?.find(n => n.id === item.id);
-          if (node) {
-            return {
-              ...item,
-              x: node.x || 0,
-              y: node.y || 0
-            };
-          }
-          return item;
-        });
+    // Determine which items to arrange
+    const itemsToArrange = selectedIds.size > 0
+      ? activeSpace.items.filter(item => selectedIds.has(item.id))
+      : activeSpace.items;
 
-        // Combine manual + layouted items
-        const newItems = [...manualItems, ...layoutedItems];
+    const otherItems = selectedIds.size > 0
+      ? activeSpace.items.filter(item => !selectedIds.has(item.id))
+      : [];
 
-        // 1. Update items
-        updateItems(newItems);
+    // Arrange selected/all items
+    const arranged = layout(itemsToArrange, sortBy);
 
-        // 2. Fit camera to new layout
-        const fitParams = getFitToViewParams(newItems);
-        setCameraOverride({ ...fitParams, id: Date.now().toString() });
+    // Combine arranged items with others
+    const newItems = [...arranged, ...otherItems];
+
+    // Update items
+    updateItems(newItems);
+
+    // Update space preferences
+    setSpaces(prev => ({
+      ...prev,
+      [activeSpaceId]: {
+        ...prev[activeSpaceId],
+        layoutType,
+        sortBy
       }
-    } catch (err) {
-      console.error("Auto layout failed:", err);
-    } finally {
-      setIsLayouting(false);
-    }
-  }, [activeSpace.items, isLayouting, updateItems]);
+    }));
+
+    // Fit camera to arranged bounds
+    const fitParams = getFitToViewParams(arranged);
+    setCameraOverride({ ...fitParams, id: Date.now().toString() });
+  }, [activeSpace.items, activeSpaceId, updateItems]);
 
   // Navigation Logic
   const handleNavigate = (targetSpaceId: string) => {
@@ -1080,6 +1150,23 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
             setShowOverview(false);
             setSelection(new Set());
           }}
+          onCreateSpace={() => {
+            const newSpaceId = `space-${Date.now()}`;
+            setSpaces(prev => ({
+              ...prev,
+              [newSpaceId]: {
+                id: newSpaceId,
+                name: 'New Space',
+                parentId: null,
+                items: [],
+                connections: [],
+                camera: { x: 0, y: 0, zoom: 1 }
+              }
+            }));
+            setActiveSpaceId(newSpaceId);
+            setShowOverview(false);
+            setSelection(new Set());
+          }}
         />
       ) : (
         <div className="w-full h-full">
@@ -1145,6 +1232,36 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
         <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
+          {/* Auto Arrange Button */}
+          <AutoArrangeButton
+            layoutType={activeSpace.layoutType || 'grid'}
+            sortBy={activeSpace.sortBy || 'updated'}
+            onLayoutChange={(layout) => {
+              setSpaces(prev => ({
+                ...prev,
+                [activeSpaceId]: {
+                  ...prev[activeSpaceId],
+                  layoutType: layout
+                }
+              }));
+            }}
+            onSortChange={(sort) => {
+              setSpaces(prev => ({
+                ...prev,
+                [activeSpaceId]: {
+                  ...prev[activeSpaceId],
+                  sortBy: sort
+                }
+              }));
+            }}
+            onArrange={() => handleAutoArrange(
+              activeSpace.layoutType || 'grid',
+              activeSpace.sortBy || 'updated',
+              selection
+            )}
+            hasSelection={selection.size > 0}
+          />
+
           {/* AI Studio Button */}
           <button
             className="bg-blue-600 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-blue-500 text-white transition-all shadow-xl hover:scale-105 active:scale-95"
@@ -1152,15 +1269,6 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
             title="AI Studio"
           >
             <Zap size={20} fill="currentColor" />
-          </button>
-
-          {/* Organize Button */}
-          <button
-            className="bg-gray-900/95 backdrop-blur-xl p-3.5 rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10"
-            onClick={handleAutoLayout}
-            title="Organize"
-          >
-            <LayoutGrid size={20} />
           </button>
 
           {/* New Space Button */}
@@ -1265,8 +1373,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 <button
                   className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
+                    const now = Date.now();
                     const newItem: SpatialItem = {
-                      id: Date.now().toString(),
+                      id: now.toString(),
                       type: 'sticky',
                       x: -window.innerWidth/2 * 0.1,
                       y: 0,
@@ -1275,7 +1384,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
                       rotation: (Math.random() - 0.5) * 6,
                       content: 'New thought...',
-                      color: 'bg-yellow-200'
+                      color: 'bg-yellow-200',
+                      metadata: { createdAt: now, updatedAt: now }
                     };
                     updateItems([...activeSpace.items, newItem]);
                     setShowAddMenu(false);
@@ -1287,8 +1397,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 <button
                   className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
+                    const now = Date.now();
                     const newItem: SpatialItem = {
-                      id: Date.now().toString(),
+                      id: now.toString(),
                       type: 'note',
                       x: -window.innerWidth/2 * 0.1,
                       y: 0,
@@ -1296,7 +1407,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       h: 200,
                       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
                       rotation: (Math.random() - 0.5) * 6,
-                      content: '<p>New Note</p>'
+                      content: '<p>New Note</p>',
+                      metadata: { createdAt: now, updatedAt: now }
                     };
                     updateItems([...activeSpace.items, newItem]);
                     setShowAddMenu(false);
@@ -1308,8 +1420,9 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 <button
                   className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
+                    const now = Date.now();
                     const newItem: SpatialItem = {
-                      id: Date.now().toString(),
+                      id: now.toString(),
                       type: 'image',
                       x: -window.innerWidth/2 * 0.1,
                       y: 0,
@@ -1317,7 +1430,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       h: 200,
                       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
                       rotation: (Math.random() - 0.5) * 6,
-                      content: 'https://picsum.photos/400/300'
+                      content: 'https://picsum.photos/400/300',
+                      metadata: { createdAt: now, updatedAt: now }
                     };
                     updateItems([...activeSpace.items, newItem]);
                     setShowAddMenu(false);
@@ -1329,9 +1443,10 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 <button
                   className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
-                    const newSpaceId = `space-${Date.now()}`;
+                    const now = Date.now();
+                    const newSpaceId = `space-${now}`;
                     const newItem: SpatialItem = {
-                      id: Date.now().toString(),
+                      id: now.toString(),
                       type: 'folder',
                       x: -window.innerWidth/2 * 0.1,
                       y: 0,
@@ -1340,7 +1455,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
                       rotation: (Math.random() - 0.5) * 6,
                       content: 'New Space',
-                      linkedSpaceId: newSpaceId
+                      linkedSpaceId: newSpaceId,
+                      metadata: { createdAt: now, updatedAt: now }
                     };
                     setSpaces(prev => ({
                       ...prev,
@@ -1381,14 +1497,14 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
         />
       )}
 
-      {/* Settings Button - Bottom Left */}
+      {/* Settings Button - Top Right */}
       {!showOverview && (
         <button
-          className="absolute bottom-8 left-8 p-3.5 bg-gray-900/95 backdrop-blur-xl rounded-2xl hover:bg-gray-800 text-white transition-all shadow-xl hover:scale-105 active:scale-95 border border-white/10 z-50"
+          className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors border border-gray-100 z-50"
           onClick={() => setShowSettings(true)}
           title="Settings"
         >
-          <Settings size={20} />
+          <Settings size={20} className="text-gray-700" />
         </button>
       )}
 
@@ -1409,11 +1525,12 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
 
       {/* AI Modal */}
       {showAIModal && (
-        <AIModal 
+        <AIModal
           onClose={() => setShowAIModal(false)}
           onGenerate={(type, content, metadata) => {
+             const now = Date.now();
              const newItem: SpatialItem = {
-                id: Date.now().toString(),
+                id: now.toString(),
                 type,
                 x: -window.innerWidth/2 * 0.1 + (Math.random() * 40 - 20),
                 y: 0 + (Math.random() * 40 - 20),
@@ -1423,7 +1540,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
                 rotation: (Math.random() - 0.5) * 4,
                 content: content,
                 color: type === 'sticky' ? 'bg-blue-100' : undefined,
-                metadata: metadata
+                metadata: { ...metadata, createdAt: now, updatedAt: now }
              };
              updateItems([...activeSpace.items, newItem]);
           }}

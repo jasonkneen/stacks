@@ -1,5 +1,9 @@
 export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder';
 
+// Auto-arrange layout types
+export type LayoutType = 'grid' | 'bento' | 'random';
+export type SortOption = 'updated' | 'added' | 'name' | 'type';
+
 export interface SpatialItem {
   id: string;
   type: ItemType;
@@ -21,6 +25,8 @@ export interface SpatialItem {
     colors?: string[];
     isAnalyzing?: boolean;
     title?: string;
+    createdAt?: number;   // Timestamp for sorting by added
+    updatedAt?: number;   // Timestamp for sorting by updated
   };
   linkedSpaceId?: string; // For folders
 }
@@ -38,6 +44,9 @@ export interface Space {
   items: SpatialItem[];
   connections: Connection[];
   camera: { x: number; y: number; zoom: number };
+  // Auto-arrange preferences (last used)
+  layoutType?: LayoutType;
+  sortBy?: SortOption;
 }
 
 export interface SelectionState {
