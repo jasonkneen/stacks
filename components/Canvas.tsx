@@ -682,30 +682,17 @@ export const Canvas: React.FC<CanvasProps> = ({
         onMarkManuallyPositioned(draggedIds);
 
         // --- STACKING DETECTION ---
-        const draggedItem = items.find(i => i.id === draggingId);
-        if (draggedItem && hoveredItemId && hoveredItemId !== draggingId) {
-            // Stack with the hovered item
-            onStackItems(draggingId, hoveredItemId);
-        } else if (draggedItem) {
-            // Check overlap by position
-            const centerX = draggedItem.x + draggedItem.w / 2;
-            const centerY = draggedItem.y + draggedItem.h / 2;
-
-            for (const item of items) {
-                if (item.id === draggingId) continue;
-
-                // Check if center of dragged item is inside another item's bounding box
-                if (
-                    centerX > item.x &&
-                    centerX < item.x + item.w &&
-                    centerY > item.y &&
-                    centerY < item.y + item.h
-                ) {
-                    onStackItems(draggingId, item.id);
-                    break; // Only stack with one target at a time
-                }
+        // Only stack if explicitly hovering over a folder, not on overlap
+        const draggedItemRaw = items.find(i => i.id === draggingId);
+        if (draggedItemRaw && hoveredItemId && hoveredItemId !== draggingId) {
+            const hoveredItem = items.find(i => i.id === hoveredItemId);
+            // Only auto-stack when dropping on a folder
+            if (hoveredItem?.type === 'folder') {
+                onStackItems(draggingId, hoveredItemId);
             }
         }
+        // DISABLED: Auto-stacking on overlap creates too many false positives
+        // Users can manually drag onto folders to stack
     }
 
     if (isPanning) {
