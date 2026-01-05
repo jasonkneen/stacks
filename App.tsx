@@ -10,6 +10,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
+import { useUndoRedo } from './hooks/useUndoRedo';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
@@ -159,10 +160,19 @@ const getFitToViewParams = (items: SpatialItem[]) => {
 
 const App: React.FC = () => {
   // Load from localStorage or use initial data
-  const [spaces, setSpaces] = useState<Record<string, Space>>(() => {
-    const saved = loadSpaces();
-    return saved || INITIAL_SPACES;
+  // Undo/Redo with 50-step history
+  const {
+    state: spaces,
+    setState: setSpaces,
+    undo,
+    redo,
+    canUndo,
+    canRedo
+  } = useUndoRedo<Record<string, Space>>({
+    maxHistory: 50,
+    initialState: () => loadSpaces() || INITIAL_SPACES
   });
+
   const [activeSpaceId, setActiveSpaceId] = useState<string>(ROOT_SPACE_ID);
 
   // Autosave enabled
@@ -296,7 +306,7 @@ const App: React.FC = () => {
           deleted: beforeCount - afterCount
         });
 
-        return {
+        const newSpaces = {
             ...prev,
             [activeSpaceId]: {
                 ...space,
@@ -304,6 +314,13 @@ const App: React.FC = () => {
                 connections: newConnections
             }
         };
+
+        // CRITICAL: Save IMMEDIATELY and SYNCHRONOUSLY on delete
+        // This prevents any other operations from restoring the deleted items
+        console.log('[App] IMMEDIATE SYNC save after delete');
+        saveSpaces(newSpaces);
+
+        return newSpaces;
     });
     setSelection(new Set());
   }, [activeSpaceId]);
@@ -1024,6 +1041,17 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
         } else if (activeSpace.parentId) {
           handleBack();
         }
+      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+          // Undo/Redo
+          const activeTag = document.activeElement?.tagName;
+          if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && !(document.activeElement as HTMLElement)?.isContentEditable) {
+            e.preventDefault();
+            if (e.shiftKey) {
+              redo();
+            } else {
+              undo();
+            }
+          }
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && selection.size > 0) {
           // Check if not editing text
           const activeTag = document.activeElement?.tagName;
@@ -1063,7 +1091,7 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId]);
+  }, [activeSpace, mediaViewerItem, noteViewerItem, selection, handleDeleteItems, showAIModal, topLevelSpaces, activeSpaceId, undo, redo]);
 
   return (
     <div className="relative w-full h-full bg-gray-50 overflow-hidden text-gray-900">
