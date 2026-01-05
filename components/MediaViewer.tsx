@@ -147,8 +147,12 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
           <X size={24} />
         </button>
         <div className="flex flex-col items-end gap-1 font-mono text-xs">
+          {item.metadata?.filename && <span className="max-w-xs truncate">{item.metadata.filename as string}</span>}
           {item.metadata?.size && <span>SIZE {item.metadata.size}</span>}
-          {item.metadata?.resolution && <span>RES {item.metadata.resolution}</span>}
+          {item.metadata?.dimensions && <span>DIM {item.metadata.dimensions as string}</span>}
+          {item.metadata?.format && <span>FORMAT {item.metadata.format as string}</span>}
+          {item.metadata?.dateTaken && <span>DATE {item.metadata.dateTaken as string}</span>}
+          {item.metadata?.duration && <span>DUR {item.metadata.duration as string}</span>}
           {item.metadata?.fps && <span>FPS {item.metadata.fps}</span>}
         </div>
       </div>

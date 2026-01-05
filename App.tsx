@@ -16,6 +16,7 @@ import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types'
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
+import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
 
 // Blank canvas on first load
 const ROOT_SPACE_ID = 'root';
@@ -423,14 +424,20 @@ const App: React.FC = () => {
 
     const newItems: SpatialItem[] = [];
     const baseZIndex = Math.max(...(spaces[activeSpaceId]?.items.map(i => i.zIndex) || [0]), 0);
+    const now = Date.now();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const dataUrl = await readFile(file);
       const isVideo = file.type.startsWith('video/');
 
+      // Extract detailed metadata
+      const metadata = isVideo
+        ? await extractVideoMetadata(file, dataUrl)
+        : await extractImageMetadata(file, dataUrl);
+
       newItems.push({
-        id: `drop-${Date.now()}-${i}`,
+        id: `drop-${now}-${i}`,
         type: isVideo ? 'video' : 'image',
         x: position.x + (i % 3) * 40 - 40,
         y: position.y + Math.floor(i / 3) * 40 - 40,
@@ -440,9 +447,9 @@ const App: React.FC = () => {
         rotation: (Math.random() - 0.5) * 6,
         content: dataUrl,
         metadata: {
-          filename: file.name,
-          size: `${(file.size / 1024 / 1024).toFixed(1)}MB`,
-          type: file.type
+          ...metadata,
+          createdAt: now,
+          updatedAt: now
         }
       });
     }
@@ -1191,9 +1198,8 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
             onArrange={() => handleAutoArrange(
               activeSpace.layoutType || 'grid',
               activeSpace.sortBy || 'updated',
-              selection
+              new Set() // Empty set = arrange ALL items
             )}
-            hasSelection={selection.size > 0}
           />
         </div>
       )}
@@ -1298,6 +1304,12 @@ Please provide a thoughtful response in HTML format with proper paragraph tags.`
           onDelete={handleDeleteItems}
           onGroupToStack={handleGroupToStack}
           onUngroup={handleUngroup}
+          onArrangeSelection={(layoutType, sortBy) => {
+            // Arrange only selected items
+            handleAutoArrange(layoutType, sortBy, selection);
+          }}
+          layoutType={activeSpace.layoutType || 'grid'}
+          sortBy={activeSpace.sortBy || 'updated'}
         />
       )}
 

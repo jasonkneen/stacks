@@ -16,17 +16,23 @@ export interface SpatialItem {
   content: string; // Text for notes/stickies, URL for media, Name for folders
   color?: string; // Tailwind class for background color (e.g., 'bg-yellow-200')
   metadata?: {
+    filename?: string;
     size?: string;
     duration?: string;
     fps?: string;
     resolution?: string;
+    dimensions?: string;
+    format?: string;
+    dateTaken?: string;
     manuallyPositioned?: boolean;
     description?: string;
     colors?: string[];
     isAnalyzing?: boolean;
+    isGenerating?: boolean;
     title?: string;
     createdAt?: number;   // Timestamp for sorting by added
     updatedAt?: number;   // Timestamp for sorting by updated
+    usedTools?: boolean;
   };
   linkedSpaceId?: string; // For folders
 }

@@ -8,7 +8,6 @@ interface AutoArrangeButtonProps {
   onLayoutChange: (layout: LayoutType) => void;
   onSortChange: (sort: SortOption) => void;
   onArrange: () => void;
-  hasSelection: boolean;
 }
 
 const LAYOUT_OPTIONS: { value: LayoutType; label: string; icon: typeof LayoutGrid }[] = [
@@ -30,7 +29,6 @@ export const AutoArrangeButton: React.FC<AutoArrangeButtonProps> = ({
   onLayoutChange,
   onSortChange,
   onArrange,
-  hasSelection,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -46,7 +44,7 @@ export const AutoArrangeButton: React.FC<AutoArrangeButtonProps> = ({
           setShowMenu(false);
         }}
         className="p-2 rounded-full bg-gray-800/10 text-gray-800 hover:bg-gray-800/15 transition-all"
-        title={`Auto-arrange ${hasSelection ? 'selected items' : 'all items'} using ${currentLayout?.label} layout`}
+        title={`Auto-arrange all items using ${currentLayout?.label} layout`}
       >
         <LayoutIcon size={18} />
       </button>

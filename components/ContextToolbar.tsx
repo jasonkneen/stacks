@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, FolderPlus, FolderOpen, Layers, LayoutGrid, Droplet } from 'lucide-react';
-import { SpatialItem } from '../types';
+import { SpatialItem, LayoutType, SortOption } from '../types';
 
 interface Props {
   selection: Set<string>;
@@ -9,6 +9,9 @@ interface Props {
   onDelete: (ids: Set<string>) => void;
   onGroupToStack: (ids: Set<string>) => void;
   onUngroup: (folderId: string) => void;
+  onArrangeSelection: (layoutType: LayoutType, sortBy: SortOption) => void;
+  layoutType: LayoutType;
+  sortBy: SortOption;
 }
 
 const COLORS = [
@@ -26,7 +29,10 @@ export const ContextToolbar: React.FC<Props> = ({
   onUpdateItem,
   onDelete,
   onGroupToStack,
-  onUngroup
+  onUngroup,
+  onArrangeSelection,
+  layoutType,
+  sortBy
 }) => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const isVisible = selection.size > 0;
@@ -102,6 +108,15 @@ export const ContextToolbar: React.FC<Props> = ({
             )}
           </button>
         )}
+
+        {/* Auto-Arrange Selection */}
+        <button
+          onClick={() => onArrangeSelection(layoutType, sortBy)}
+          className={btnClass}
+          title="Auto-arrange selected items"
+        >
+          <LayoutGrid size={20} />
+        </button>
 
         {/* Delete */}
         <button
