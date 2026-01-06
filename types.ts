@@ -1,7 +1,7 @@
 export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder';
 
 // Auto-arrange layout types
-export type LayoutType = 'grid' | 'bento' | 'random';
+export type LayoutType = 'grid' | 'bento' | 'random' | 'free';
 export type SortOption = 'updated' | 'added' | 'name' | 'type';
 
 export interface SpatialItem {

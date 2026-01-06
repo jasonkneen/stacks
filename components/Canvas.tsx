@@ -26,6 +26,7 @@ interface CanvasProps {
   highlightedNodeId?: string | null; // For showing target node highlight
   onNodeClick?: (itemId: string) => void; // For changing AI target destination
   onBlankCanvasClick?: () => void; // For clearing AI prompt
+  layoutType?: LayoutType; // Current layout mode - disables grid for 'random' and 'free'
 }
 
 // Sort items by the given option
@@ -217,7 +218,10 @@ export const Canvas: React.FC<CanvasProps> = ({
   highlightedNodeId,
   onNodeClick,
   onBlankCanvasClick,
+  layoutType = 'grid',
 }) => {
+  // Disable grid snapping for random and free layouts
+  const enableGridSnap = layoutType === 'grid' || layoutType === 'bento';
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
 
@@ -283,6 +287,8 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Calculate visible grid slots based on viewport and camera - only when actually dragging/resizing
   const visibleGridSlots = useMemo(() => {
+    // Don't show grid for random or free layouts
+    if (!enableGridSnap) return [];
     if (!draggingId && !resizingId) return [];
 
     // Limit grid to reasonable area to avoid performance issues
@@ -302,7 +308,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     return slots;
-  }, [draggingId, resizingId, GRID_SLOT_SIZE, GRID_CELL_SIZE]);
+  }, [enableGridSnap, draggingId, resizingId, GRID_SLOT_SIZE, GRID_CELL_SIZE]);
 
   // --- Helpers ---
   const screenToWorld = useCallback((screenX: number, screenY: number) => {
@@ -548,26 +554,29 @@ export const Canvas: React.FC<CanvasProps> = ({
         let newW = Math.max(GRID_CELL_SIZE * 0.5, startData.w + scaledDeltaX);
         let newH = Math.max(GRID_CELL_SIZE * 0.5, startData.h + scaledDeltaY);
 
-        // Magnetic snap during resize
-        const SNAP_TOLERANCE = 30;
+        // Calculate grid cells for metadata
         const gridCellsX = Math.max(1, Math.round(newW / GRID_SLOT_SIZE));
         const gridCellsY = Math.max(1, Math.round(newH / GRID_SLOT_SIZE));
 
-        const snappedW = gridCellsX * GRID_SLOT_SIZE - GRID_GAP;
-        const snappedH = gridCellsY * GRID_SLOT_SIZE - GRID_GAP;
+        // Magnetic snap during resize (only for grid/bento layouts)
+        if (enableGridSnap) {
+          const SNAP_TOLERANCE = 30;
+          const snappedW = gridCellsX * GRID_SLOT_SIZE - GRID_GAP;
+          const snappedH = gridCellsY * GRID_SLOT_SIZE - GRID_GAP;
 
-        const distanceW = Math.abs(newW - snappedW);
-        const distanceH = Math.abs(newH - snappedH);
+          const distanceW = Math.abs(newW - snappedW);
+          const distanceH = Math.abs(newH - snappedH);
 
-        // Apply magnetic snap if within tolerance
-        if (distanceW <= SNAP_TOLERANCE) {
-            newW = snappedW;
+          // Apply magnetic snap if within tolerance
+          if (distanceW <= SNAP_TOLERANCE) {
+              newW = snappedW;
+          }
+          if (distanceH <= SNAP_TOLERANCE) {
+              newH = snappedH;
+          }
         }
-        if (distanceH <= SNAP_TOLERANCE) {
-            newH = snappedH;
-        }
 
-        // Update item with snapped or raw dimensions
+        // Update item with dimensions
         onUpdateItems(currentItems =>
             currentItems.map(item =>
                 item.id === resizingId
@@ -610,34 +619,36 @@ export const Canvas: React.FC<CanvasProps> = ({
         let worldDeltaX = totalDeltaX / camera.zoom;
         let worldDeltaY = totalDeltaY / camera.zoom;
 
-        // Magnetic snap during drag
-        const SNAP_TOLERANCE = 40;
-        const draggedItem = items.find(i => i.id === draggingId);
-        if (draggedItem) {
-            const startPos = dragStartDataRef.current.itemPositions.get(draggingId);
-            if (startPos) {
-                const currentX = startPos.x + worldDeltaX;
-                const currentY = startPos.y + worldDeltaY;
+        // Magnetic snap during drag (only for grid/bento layouts)
+        if (enableGridSnap) {
+          const SNAP_TOLERANCE = 40;
+          const draggedItem = items.find(i => i.id === draggingId);
+          if (draggedItem) {
+              const startPos = dragStartDataRef.current.itemPositions.get(draggingId);
+              if (startPos) {
+                  const currentX = startPos.x + worldDeltaX;
+                  const currentY = startPos.y + worldDeltaY;
 
-                const snappedX = Math.round(currentX / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
-                const snappedY = Math.round(currentY / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+                  const snappedX = Math.round(currentX / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+                  const snappedY = Math.round(currentY / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
 
-                const distanceX = Math.abs(currentX - snappedX);
-                const distanceY = Math.abs(currentY - snappedY);
+                  const distanceX = Math.abs(currentX - snappedX);
+                  const distanceY = Math.abs(currentY - snappedY);
 
-                // Apply magnetic snap if within tolerance
-                if (distanceX <= SNAP_TOLERANCE) {
-                    worldDeltaX = snappedX - startPos.x;
-                }
-                if (distanceY <= SNAP_TOLERANCE) {
-                    worldDeltaY = snappedY - startPos.y;
-                }
-            }
+                  // Apply magnetic snap if within tolerance
+                  if (distanceX <= SNAP_TOLERANCE) {
+                      worldDeltaX = snappedX - startPos.x;
+                  }
+                  if (distanceY <= SNAP_TOLERANCE) {
+                      worldDeltaY = snappedY - startPos.y;
+                  }
+              }
+          }
         }
 
         // Store offset in ref and trigger render
         currentDragOffsetRef.current = { x: worldDeltaX, y: worldDeltaY };
-        setDragOffsetTrigger(prev => prev + 1); // Force re-render for visual update
+        setDragOffsetTrigger(prev => prev + 1);
     } else if (selectionBox) {
         // Lasso Selection Logic - use ref for visual, defer selection calc to mouseUp
         const currentWorldPos = worldPos;

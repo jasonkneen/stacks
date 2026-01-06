@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutGrid, Layers, Shuffle, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { LayoutGrid, Layers, Shuffle, ChevronDown, ArrowUpDown, Move } from 'lucide-react';
 import { LayoutType, SortOption } from '../types';
 
 interface AutoArrangeButtonProps {
@@ -11,9 +11,10 @@ interface AutoArrangeButtonProps {
 }
 
 const LAYOUT_OPTIONS: { value: LayoutType; label: string; icon: typeof LayoutGrid }[] = [
+  { value: 'free', label: 'Free', icon: Move },
   { value: 'grid', label: 'Grid', icon: LayoutGrid },
   { value: 'bento', label: 'Bento', icon: Layers },
-  { value: 'random', label: 'Random', icon: Shuffle },
+  { value: 'random', label: 'Scatter', icon: Shuffle },
 ];
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -34,17 +35,25 @@ export const AutoArrangeButton: React.FC<AutoArrangeButtonProps> = ({
 
   const currentLayout = LAYOUT_OPTIONS.find(l => l.value === layoutType);
   const LayoutIcon = currentLayout?.icon || LayoutGrid;
+  const isFreeMode = layoutType === 'free';
 
   return (
     <div className="flex items-center gap-0.5 bg-white/40 backdrop-blur-md rounded-full p-1 shadow-lg border border-white/60">
       {/* Execution Button */}
       <button
         onClick={() => {
-          onArrange();
+          if (!isFreeMode) {
+            onArrange();
+          }
           setShowMenu(false);
         }}
-        className="p-2 rounded-full bg-gray-800/10 text-gray-800 hover:bg-gray-800/15 transition-all"
-        title={`Auto-arrange all items using ${currentLayout?.label} layout`}
+        disabled={isFreeMode}
+        className={`p-2 rounded-full transition-all ${
+          isFreeMode
+            ? 'text-gray-400 cursor-default'
+            : 'bg-gray-800/10 text-gray-800 hover:bg-gray-800/15'
+        }`}
+        title={isFreeMode ? 'Free placement mode - no auto-arrange' : `Auto-arrange all items using ${currentLayout?.label} layout`}
       >
         <LayoutIcon size={18} />
       </button>

@@ -9,12 +9,13 @@ import { SpaceOverview } from './components/SpaceOverview';
 import { SettingsModal } from './components/SettingsModal';
 import { AIPromptPopup } from './components/AIPromptPopup';
 import { AIChat, AIResponse, AIOptions, AI_FORMAT_SYSTEM_PROMPT, parseAIResponse } from './components/AIChat';
+import { QuickGenerate } from './components/QuickGenerate';
 import { AutoArrangeButton } from './components/AutoArrangeButton';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
-import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings, Video, Mic } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
@@ -169,6 +170,7 @@ const App: React.FC = () => {
   const [showOverview, setShowOverview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [quickGenerateMode, setQuickGenerateMode] = useState<'image' | 'video' | 'audio' | null>(null);
   const [aiPromptState, setAIPromptState] = useState<{
     itemId?: string;
     itemIds?: Set<string>;
@@ -1608,6 +1610,7 @@ const App: React.FC = () => {
               connections={activeSpace.connections || []}
               initialCamera={activeSpace.camera}
               cameraOverride={cameraOverride}
+              layoutType={activeSpace.layoutType || 'grid'}
               selection={selection}
               onSelectionChange={setSelection}
               onUpdateItems={updateItems}
@@ -1712,15 +1715,6 @@ const App: React.FC = () => {
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
         <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
-          {/* AI Studio Button */}
-          <button
-            className="bg-blue-500/80 backdrop-blur-md p-3.5 rounded-2xl hover:bg-blue-500/90 text-white transition-all shadow-lg hover:scale-105 active:scale-95 border border-blue-400/40"
-            onClick={() => setShowAIModal(true)}
-            title="AI Studio"
-          >
-            <Zap size={20} fill="currentColor" />
-          </button>
-
           {/* New Space Button */}
           <button
             className="bg-white/40 backdrop-blur-md p-3.5 rounded-2xl hover:bg-white/50 text-gray-800 transition-all shadow-lg hover:scale-105 active:scale-95 border border-white/60"
@@ -1870,26 +1864,34 @@ const App: React.FC = () => {
                 <button
                   className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
-                    const now = Date.now();
-                    const newItem: SpatialItem = {
-                      id: now.toString(),
-                      type: 'image',
-                      x: -window.innerWidth/2 * 0.1,
-                      y: 0,
-                      w: 300,
-                      h: 200,
-                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
-                      rotation: (Math.random() - 0.5) * 6,
-                      content: 'https://picsum.photos/400/300',
-                      metadata: { createdAt: now, updatedAt: now }
-                    };
-                    updateItems([...activeSpace.items, newItem]);
+                    setQuickGenerateMode('image');
                     setShowAddMenu(false);
                   }}
                 >
                   <ImageIcon size={18} />
-                  <span className="text-sm">Image</span>
+                  <span className="text-sm">AI Image</span>
                 </button>
+                <button
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    setQuickGenerateMode('video');
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <Video size={18} />
+                  <span className="text-sm">AI Video</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    setQuickGenerateMode('audio');
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <Mic size={18} />
+                  <span className="text-sm">Transcribe</span>
+                </button>
+                <div className="border-t border-gray-200/50 my-1" />
                 <button
                   className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
@@ -1929,21 +1931,54 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Quick Generate Dialog */}
+            {quickGenerateMode && (
+              <QuickGenerate
+                initialMode={quickGenerateMode}
+                onClose={() => setQuickGenerateMode(null)}
+                onGenerate={(type, content, metadata) => {
+                  const now = Date.now();
+                  const newItem: SpatialItem = {
+                    id: now.toString(),
+                    type,
+                    x: -window.innerWidth/2 * 0.1 + (Math.random() * 40 - 20),
+                    y: 0 + (Math.random() * 40 - 20),
+                    w: type === 'video' ? 400 : 300,
+                    h: type === 'video' ? 280 : type === 'image' ? 300 : 200,
+                    zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                    rotation: (Math.random() - 0.5) * 4,
+                    content: content,
+                    metadata: { ...metadata, createdAt: now, updatedAt: now }
+                  };
+                  updateItems([...activeSpace.items, newItem]);
+                }}
+              />
+            )}
+
             <button
-              className={`bg-white/40 backdrop-blur-md border border-white/60 text-gray-800 p-3.5 rounded-full hover:bg-white/50 transition-all shadow-lg hover:scale-105 active:scale-95 ${showAddMenu ? 'rotate-45' : ''}`}
-              onClick={() => setShowAddMenu(!showAddMenu)}
+              className={`bg-white/40 backdrop-blur-md border border-white/60 text-gray-800 p-3.5 rounded-full hover:bg-white/50 transition-all shadow-lg hover:scale-105 active:scale-95 ${showAddMenu || quickGenerateMode ? 'rotate-45' : ''}`}
+              onClick={() => {
+                if (quickGenerateMode) {
+                  setQuickGenerateMode(null);
+                } else {
+                  setShowAddMenu(!showAddMenu);
+                }
+              }}
             >
-              {showAddMenu ? <X size={22} /> : <Plus size={22} />}
+              {showAddMenu || quickGenerateMode ? <X size={22} /> : <Plus size={22} />}
             </button>
           </div>
         </div>
       )}
 
-      {/* Click outside to close add menu */}
-      {showAddMenu && (
+      {/* Click outside to close add menu or quick generate */}
+      {(showAddMenu || quickGenerateMode) && (
         <div
           className="fixed inset-0 z-40"
-          onClick={() => setShowAddMenu(false)}
+          onClick={() => {
+            setShowAddMenu(false);
+            setQuickGenerateMode(null);
+          }}
         />
       )}
 
