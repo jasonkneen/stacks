@@ -1,6 +1,35 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo, useState, useEffect } from 'react';
 import { SpatialItem } from '../types';
 import { Folder as FolderIcon } from 'lucide-react';
+import { isMediaId, getMediaURL } from '../lib/mediaStorage';
+
+// Small component to handle media URL resolution for previews
+const MediaPreview: React.FC<{ src: string; type: 'image' | 'video' }> = memo(({ src, type }) => {
+  const [resolvedSrc, setResolvedSrc] = useState(src);
+
+  useEffect(() => {
+    if (isMediaId(src)) {
+      getMediaURL(src).then(url => {
+        if (url) setResolvedSrc(url);
+      });
+    } else {
+      setResolvedSrc(src);
+    }
+  }, [src]);
+
+  if (type === 'image') {
+    return <img src={resolvedSrc} className="w-full h-full object-cover" alt="preview" draggable={false} />;
+  }
+
+  return (
+    <div className="w-full h-full relative bg-gray-900">
+      <video src={resolvedSrc} className="w-full h-full object-cover opacity-90" muted />
+      <div className="absolute inset-0 flex items-center justify-center opacity-50">
+        <div className="w-8 h-8 rounded-full bg-white/20" />
+      </div>
+    </div>
+  );
+});
 
 interface Props {
   item: SpatialItem;
@@ -9,7 +38,7 @@ interface Props {
   getSpaceItems: (spaceId: string) => SpatialItem[];
 }
 
-export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditName, getSpaceItems }) => {
+export const FolderComponent: React.FC<Props> = memo(({ item, onDoubleClick, onEditName, getSpaceItems }) => {
   const linkedItems = useMemo(() => {
     if (!item.linkedSpaceId) return [];
     const items = getSpaceItems(item.linkedSpaceId);
@@ -106,22 +135,15 @@ export const FolderComponent: React.FC<Props> = ({ item, onDoubleClick, onEditNa
         )}
     </div>
   );
-};
+});
 
 // Helper to render mini-previews of items
 const renderPreview = (item: SpatialItem) => {
     switch (item.type) {
         case 'image':
-            return <img src={item.content} className="w-full h-full object-cover" alt="preview" draggable={false}/>;
+            return <MediaPreview src={item.content} type="image" />;
         case 'video':
-            return (
-                <div className="w-full h-full relative bg-gray-900">
-                     <video src={item.content} className="w-full h-full object-cover opacity-90" muted />
-                     <div className="absolute inset-0 flex items-center justify-center opacity-50">
-                        <div className="w-8 h-8 rounded-full bg-white/20" />
-                     </div>
-                </div>
-            );
+            return <MediaPreview src={item.content} type="video" />;
         case 'sticky':
             return (
                 <div className={`w-full h-full ${item.color || 'bg-yellow-200'} p-4 relative`}>

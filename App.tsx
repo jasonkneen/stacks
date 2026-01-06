@@ -19,6 +19,7 @@ import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
+import { storeFile } from './lib/mediaStorage';
 import {
   PaperTexture,
   MeshGradient,
@@ -474,7 +475,8 @@ const App: React.FC = () => {
 
   // Handle file drops
   const handleDropFiles = useCallback(async (files: File[], position: { x: number; y: number }) => {
-    const readFile = (file: File): Promise<string> => {
+    // Helper to read file as data URL (for metadata extraction only)
+    const readFileAsDataUrl = (file: File): Promise<string> => {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target?.result as string);
@@ -488,8 +490,13 @@ const App: React.FC = () => {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const dataUrl = await readFile(file);
       const isVideo = file.type.startsWith('video/');
+
+      // Store file in IndexedDB and get media ID
+      const mediaId = await storeFile(file, { originalName: file.name });
+
+      // Read as data URL only for metadata extraction
+      const dataUrl = await readFileAsDataUrl(file);
 
       // Extract detailed metadata
       const metadata = isVideo
@@ -505,7 +512,7 @@ const App: React.FC = () => {
         h: isVideo ? 200 : 250,
         zIndex: baseZIndex + i + 1,
         rotation: (Math.random() - 0.5) * 6,
-        content: dataUrl,
+        content: mediaId, // Store media ID instead of data URL
         metadata: {
           ...metadata,
           createdAt: now,

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, memo } from 'react';
 import { SpatialItem } from '../types';
 import { Bold, Italic, Heading1, Heading2, List, Expand } from 'lucide-react';
 
@@ -8,13 +8,13 @@ interface Props {
   onOpenNote?: (rect: DOMRect) => void;
 }
 
-export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) => {
+export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote }) => {
   const [isEditing, setIsEditing] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Extract title from content (first h1, h2, or first text)
-  const getTitle = () => {
+  // Extract title from content (memoized to avoid DOMParser on every render)
+  const title = useMemo(() => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(item.content, 'text/html');
     const h1 = doc.querySelector('h1');
@@ -23,7 +23,7 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) =
     if (h2) return h2.textContent || 'Untitled';
     const text = doc.body.textContent || '';
     return text.slice(0, 30) + (text.length > 30 ? '...' : '') || 'Untitled';
-  };
+  }, [item.content]);
 
   const handleOpenViewer = () => {
     if (containerRef.current && onOpenNote) {
@@ -68,7 +68,7 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) =
         }}
       >
         <span className="text-xs font-medium text-gray-400 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-          {getTitle()}
+          {title}
         </span>
         <button
           onClick={(e) => {
@@ -135,4 +135,4 @@ export const NoteComponent: React.FC<Props> = ({ item, onChange, onOpenNote }) =
       </div>
     </div>
   );
-};
+});

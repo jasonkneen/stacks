@@ -1,6 +1,7 @@
-import React, { useState, useRef, memo } from 'react';
+import React, { useState, useRef, memo, useEffect } from 'react';
 import { SpatialItem } from '../types';
 import { Play, Pause } from 'lucide-react';
+import { isMediaId, getMediaURL } from '../lib/mediaStorage';
 
 interface Props {
   item: SpatialItem;
@@ -10,8 +11,20 @@ interface Props {
 export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) => {
   const [loaded, setLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState<string>(item.content);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Resolve media ID to object URL if needed
+  useEffect(() => {
+    if (isMediaId(item.content)) {
+      getMediaURL(item.content).then(url => {
+        if (url) setResolvedSrc(url);
+      });
+    } else {
+      setResolvedSrc(item.content);
+    }
+  }, [item.content]);
 
   const handleDoubleClick = () => {
     if (containerRef.current) {
@@ -48,7 +61,7 @@ export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) =>
 
       {item.type === 'image' ? (
         <img
-            src={item.content}
+            src={resolvedSrc}
             alt="media"
             className={`w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
             draggable={false}
@@ -60,10 +73,9 @@ export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) =>
         <div className="w-full h-full relative overflow-hidden">
             <video
                 ref={videoRef}
-                src={item.content}
+                src={resolvedSrc}
                 className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
                 muted
-                loop
                 preload="metadata"
                 playsInline
                 onCanPlay={() => setLoaded(true)}

@@ -273,7 +273,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Drag & Drop State
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
   
   // Physics State
   const dragTiltRef = useRef(0);
@@ -427,7 +427,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         if (isPanTrigger) {
             setIsPanning(true);
-            setLastMousePos({ x: e.clientX, y: e.clientY });
+            lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             velocityRef.current = { x: 0, y: 0 };
             cancelAnimationFrame(animationFrameRef.current);
         } else if (e.button === 0) {
@@ -493,7 +493,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
 
     setDraggingId(itemId);
-    setLastMousePos({ x: e.clientX, y: e.clientY });
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
     dragTiltRef.current = 0;
     
     // Selection Logic
@@ -545,9 +545,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    const deltaX = e.clientX - lastMousePos.x;
-    const deltaY = e.clientY - lastMousePos.y;
-    setLastMousePos({ x: e.clientX, y: e.clientY });
+    const deltaX = e.clientX - lastMousePosRef.current.x;
+    const deltaY = e.clientY - lastMousePosRef.current.y;
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
     // Update velocity for inertia
     velocityRef.current = { x: deltaX, y: deltaY };
@@ -689,7 +689,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         selectionBoxRef.current = newBox;
         setSelectionBoxTrigger(prev => prev + 1);
     }
-  }, [isPanning, draggingId, resizingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
+  }, [isPanning, draggingId, resizingId, selectionBox, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
     // Clear resize state (already snapped during resize if close)
@@ -988,18 +988,18 @@ export const Canvas: React.FC<CanvasProps> = ({
             )}
         </svg>
 
-        {/* Grid Slot Visualization - Only during drag/resize */}
+        {/* Grid Slot Visualization - Only during drag/resize (GPU accelerated) */}
         {visibleGridSlots.length > 0 && (
           <div className="absolute top-0 left-0 pointer-events-none" style={{ zIndex: 1 }}>
             {visibleGridSlots.map((slot, idx) => (
               <div
                 key={idx}
-                className="absolute border border-gray-300/20 rounded-2xl transition-opacity duration-200"
+                className="absolute border border-gray-300/20 rounded-2xl"
                 style={{
-                  left: slot.x,
-                  top: slot.y,
+                  transform: `translate3d(${slot.x}px, ${slot.y}px, 0)`,
                   width: slot.w,
                   height: slot.h,
+                  willChange: 'transform',
                 }}
               />
             ))}
@@ -1043,15 +1043,15 @@ export const Canvas: React.FC<CanvasProps> = ({
           );
         })}
 
-        {/* Lasso Selection Box - uses ref for smooth visual during drag */}
+        {/* Lasso Selection Box - uses ref for smooth visual during drag (GPU accelerated) */}
         {selectionBox && selectionBoxRef.current && (
             <div
                 className="absolute border-2 border-blue-500 bg-blue-500/10 rounded-lg pointer-events-none z-[9999]"
                 style={{
-                    left: selectionBoxRef.current.x,
-                    top: selectionBoxRef.current.y,
+                    transform: `translate3d(${selectionBoxRef.current.x}px, ${selectionBoxRef.current.y}px, 0)`,
                     width: selectionBoxRef.current.w,
                     height: selectionBoxRef.current.h,
+                    willChange: 'transform, width, height',
                 }}
             />
         )}

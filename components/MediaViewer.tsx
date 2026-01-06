@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SpatialItem } from '../types';
 import { X, Loader2, Sparkles, Send } from 'lucide-react';
+import { isMediaId, getMediaURL } from '../lib/mediaStorage';
 
 interface Props {
   item: SpatialItem;
@@ -16,8 +17,20 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnimating, setIsAnimating] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(item.content);
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
+
+  // Resolve media ID to object URL if needed
+  useEffect(() => {
+    if (isMediaId(item.content)) {
+      getMediaURL(item.content).then(url => {
+        if (url) setResolvedSrc(url);
+      });
+    } else {
+      setResolvedSrc(item.content);
+    }
+  }, [item.content]);
 
   // Get analysis data from metadata
   const description = item.metadata?.description as string | undefined;
@@ -169,14 +182,14 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
 
         {item.type === 'image' ? (
           <img
-            src={item.content}
+            src={resolvedSrc}
             alt="Fullscreen"
             className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
             onLoad={() => setLoaded(true)}
           />
         ) : (
           <video
-            src={item.content}
+            src={resolvedSrc}
             controls
             autoPlay
             className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}

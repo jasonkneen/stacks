@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import { SpatialItem } from '../types';
 
 interface Props {
@@ -6,7 +6,7 @@ interface Props {
   onChange: (val: string) => void;
 }
 
-export const StickyComponent: React.FC<Props> = ({ item, onChange }) => {
+export const StickyComponent: React.FC<Props> = memo(({ item, onChange }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const bgColor = item.color || 'bg-yellow-200';
 
@@ -49,4 +49,4 @@ export const StickyComponent: React.FC<Props> = ({ item, onChange }) => {
       `}</style>
     </div>
   );
-};
+});
