@@ -25,6 +25,8 @@ interface ItemRendererProps {
   onHover: (id: string | null) => void;
   onConnectStart?: (e: React.MouseEvent, id: string) => void;
   onAIPromptStart: (e: React.MouseEvent, itemId: string, position: { x: number; y: number }) => void;
+  isHighlighted?: boolean; // For target node highlighting
+  zoom?: number; // Camera zoom for inverse scaling of handles
 }
 
 export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
@@ -43,7 +45,9 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   getSpaceItems,
   onHover,
   onConnectStart,
-  onAIPromptStart
+  onAIPromptStart,
+  isHighlighted = false,
+  zoom = 1
 }) => {
   const [activeHandle, setActiveHandle] = useState<HandlePosition>('right');
   const [isHovered, setIsHovered] = useState(false);
@@ -87,7 +91,13 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   const commonClasses = `absolute will-change-transform group/item ${
     isInteracting
       ? 'shadow-[0_30px_60px_-10px_rgba(0,0,0,0.3)] z-[100] transition-none'
-      : `transition-shadow duration-300 ${isSelected ? 'ring-4 ring-blue-500/50 shadow-2xl z-50' : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'}`
+      : `transition-shadow duration-300 ${
+          isHighlighted
+            ? 'ring-4 ring-green-500/60 shadow-2xl z-50 animate-pulse'
+            : isSelected
+              ? 'ring-4 ring-blue-500/50 shadow-2xl z-50'
+              : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'
+        }`
   } ${isGenerating ? 'animate-pulse ring-4 ring-blue-400/50' : ''}`;
 
   // Calculate final transform
@@ -157,7 +167,13 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
           <>
             {/* Top */}
             <div
-              className={`absolute -top-3 left-1/2 -translate-x-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'top' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute z-[60] transition-opacity duration-150 ${activeHandle === 'top' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              style={{
+                top: `${-3 / zoom}px`,
+                left: '50%',
+                transform: `translateX(-50%) scale(${1 / zoom})`,
+                transformOrigin: 'center'
+              }}
             >
               <div
                 className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
@@ -186,7 +202,13 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
 
             {/* Right */}
             <div
-              className={`absolute top-1/2 -right-3 -translate-y-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'right' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute z-[60] transition-opacity duration-150 ${activeHandle === 'right' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              style={{
+                top: '50%',
+                right: `${-3 / zoom}px`,
+                transform: `translateY(-50%) scale(${1 / zoom})`,
+                transformOrigin: 'center'
+              }}
             >
               <div
                 className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
@@ -215,7 +237,13 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
 
             {/* Bottom */}
             <div
-              className={`absolute -bottom-3 left-1/2 -translate-x-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'bottom' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute z-[60] transition-opacity duration-150 ${activeHandle === 'bottom' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              style={{
+                bottom: `${-3 / zoom}px`,
+                left: '50%',
+                transform: `translateX(-50%) scale(${1 / zoom})`,
+                transformOrigin: 'center'
+              }}
             >
               <div
                 className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
@@ -244,7 +272,13 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
 
             {/* Left */}
             <div
-              className={`absolute top-1/2 -left-3 -translate-y-1/2 z-[60] transition-opacity duration-150 ${activeHandle === 'left' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute z-[60] transition-opacity duration-150 ${activeHandle === 'left' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              style={{
+                top: '50%',
+                left: `${-3 / zoom}px`,
+                transform: `translateY(-50%) scale(${1 / zoom})`,
+                transformOrigin: 'center'
+              }}
             >
               <div
                 className="w-6 h-6 rounded-full bg-white/40 backdrop-blur-md border border-white/60 hover:bg-white/50 transition-all cursor-pointer shadow-lg hover:scale-110 flex items-center justify-center"
@@ -276,11 +310,25 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       {/* Resize Handle - Bottom Right Corner */}
       {!isDragging && onResizeStart && (
         <div
-          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-[70] opacity-0 group-hover/item:opacity-100 transition-opacity"
+          className="absolute z-[70] opacity-0 group-hover/item:opacity-100 transition-opacity cursor-se-resize"
+          style={{
+            bottom: 0,
+            right: 0,
+            width: `${24 / zoom}px`,
+            height: `${24 / zoom}px`
+          }}
           onMouseDown={(e) => onResizeStart(e, item.id)}
         >
           {/* Subtle corner indicator */}
-          <div className="absolute bottom-1 right-1 w-2 h-2 border-r-2 border-b-2 border-gray-400/50 rounded-br-sm" />
+          <div
+            className="absolute border-r-2 border-b-2 border-gray-400/50 rounded-br-sm"
+            style={{
+              bottom: `${4 / zoom}px`,
+              right: `${4 / zoom}px`,
+              width: `${8 / zoom}px`,
+              height: `${8 / zoom}px`
+            }}
+          />
         </div>
       )}
     </div>
@@ -291,6 +339,8 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   if (prev.isDragging !== next.isDragging) return false;
   if (prev.isResizing !== next.isResizing) return false;
   if (prev.dragTilt !== next.dragTilt) return false;
+  if (prev.zoom !== next.zoom) return false;
+  if (prev.isHighlighted !== next.isHighlighted) return false;
 
   // Deep compare only necessary item properties
   const prevItem = prev.item;

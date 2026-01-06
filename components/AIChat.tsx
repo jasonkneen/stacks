@@ -26,6 +26,9 @@ interface Props {
   onSubmit: (prompt: string, options?: AIOptions) => void;
   onClose: () => void;
   initialExpanded?: boolean;
+  targetNodeLabel?: string; // Label for @ chip showing routing destination
+  onTargetNodeClick?: () => void; // Called when @ chip is clicked
+  disableBackdropClose?: boolean; // Disable closing via backdrop (use blank canvas click instead)
 }
 
 // System prompt for the AI to understand output formats
@@ -154,7 +157,10 @@ export const AIChat: React.FC<Props> = ({
   placeholder = "Ask AI...",
   onSubmit,
   onClose,
-  initialExpanded = false
+  initialExpanded = false,
+  targetNodeLabel,
+  onTargetNodeClick,
+  disableBackdropClose = false
 }) => {
   const [prompt, setPrompt] = useState('');
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
@@ -165,19 +171,64 @@ export const AIChat: React.FC<Props> = ({
   });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Detect prompt type
+  // Smart classification with scoring
   const detectedType = useMemo(() => {
-    if (detectImagePrompt(prompt)) return 'image';
-    if (detectBrainstormPrompt(prompt)) return 'sticky';
-    return 'auto';
+    if (!prompt.trim()) return 'auto';
+
+    const text = prompt;
+    const chars = text.length;
+    const lines = text.split(/\r?\n/).length;
+
+    // Hard lock: image patterns
+    const imagePatterns = [
+      /!\[[^\]]*]\([^)]*\)/,
+      /<img\b[^>]*>/i,
+      /\bdata:image\//i,
+      /\b(?:image|draw|paint|generate.*image|create.*image|make.*image)\b/i,
+      /\b(?:color|colour|fill in|colorize|color this|colour this)\b/i,
+      /\b(?:photo|picture|illustration|render|visualize)\b/i
+    ];
+    if (imagePatterns.some(re => re.test(text))) return 'image';
+
+    // Count structural elements
+    const headings = (text.match(/^#{1,6}\s+/gm) || []).length;
+    const bullets = (text.match(/^\s*[-*]\s+/gm) || []).length;
+    const separators = (text.match(/^---\s*$/gm) || []).length;
+    const paras = (text.match(/\n{2,}/g) || []).length;
+
+    // Scoring
+    let scoreSticky = 0, scoreNote = 0;
+
+    // Sticky: short, simple
+    if (chars < 300) scoreSticky += 3;
+    if (lines <= 5) scoreSticky += 2;
+    if (headings <= 1) scoreSticky += 1;
+    if (/^\s*(?:todo|remember|note|idea|reminder)\b/i.test(text)) scoreSticky += 3;
+    if (/^\s*[-*]\s*\[[ x]\]\s+/m.test(text)) scoreSticky += 2; // checkboxes
+
+    // Note: structured, moderate length
+    if (chars >= 200 && chars <= 4000) scoreNote += 2;
+    if (headings >= 1) scoreNote += 2;
+    if (bullets >= 2) scoreNote += 1;
+    if (paras >= 1) scoreNote += 2;
+    if (/^\s*(?:Summary|Overview|Context|Background|Details|Plan)\s*:/mi.test(text)) scoreNote += 2;
+
+    return scoreSticky > scoreNote ? 'sticky' : 'note';
   }, [prompt]);
 
-  // Auto-expand when image prompt detected
+  // Auto-expand when user starts typing
   useEffect(() => {
-    if (detectedType === 'image' && !isExpanded) {
+    if (prompt.length > 0 && !isExpanded) {
       setIsExpanded(true);
     }
-  }, [detectedType]);
+  }, [prompt, isExpanded]);
+
+  // Auto-select output type based on detection (only if user hasn't manually changed it)
+  useEffect(() => {
+    if (detectedType !== 'auto' && options.outputType === 'auto') {
+      setOptions(prev => ({ ...prev, outputType: detectedType }));
+    }
+  }, [detectedType, options.outputType]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -210,11 +261,13 @@ export const AIChat: React.FC<Props> = ({
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[150]"
-        onClick={onClose}
-      />
+      {/* Backdrop - only close if enabled */}
+      {!disableBackdropClose && (
+        <div
+          className="fixed inset-0 z-[150]"
+          onClick={onClose}
+        />
+      )}
 
       {/* Popup */}
       <div
@@ -226,10 +279,25 @@ export const AIChat: React.FC<Props> = ({
         }}
       >
         <div className="bg-white/90 backdrop-blur-xl border border-white/60 rounded-2xl shadow-2xl overflow-hidden min-w-[420px]">
+          {/* Target Node Chip */}
+          {targetNodeLabel && (
+            <div className="px-4 pt-3 pb-2 border-b border-gray-200/50">
+              <button
+                type="button"
+                onClick={onTargetNodeClick}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-medium transition-colors"
+              >
+                <span>@</span>
+                <span>{targetNodeLabel}</span>
+                <X size={12} className="ml-0.5" />
+              </button>
+            </div>
+          )}
+
           {/* Main Input Row */}
           <form onSubmit={handleSubmit}>
             <div className="flex items-center gap-3 px-4 py-3">
-              <Sparkles size={18} className="text-blue-600 flex-shrink-0" />
+              <Sparkles size={18} className="text-gray-600 flex-shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
@@ -243,7 +311,7 @@ export const AIChat: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
-                className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-500'}`}
+                className={`p-1.5 rounded-lg transition-all ${isExpanded ? 'bg-gray-200 text-gray-700' : 'hover:bg-gray-100 text-gray-500'}`}
               >
                 <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </button>
@@ -251,7 +319,7 @@ export const AIChat: React.FC<Props> = ({
               <button
                 type="submit"
                 disabled={!prompt.trim()}
-                className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-2 rounded-xl bg-gray-800 hover:bg-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <Send size={16} className="text-white" />
               </button>

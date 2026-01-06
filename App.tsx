@@ -147,7 +147,9 @@ const App: React.FC = () => {
     itemIds?: Set<string>;
     position: { x: number; y: number };
     mode: 'single' | 'selection';
+    targetNodeId?: string; // For smart routing to existing connections
   } | null>(null);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
 
   // MCP Client for AI tools
@@ -642,7 +644,8 @@ const App: React.FC = () => {
     sourceItemId: string | string[],
     prompt: string,
     options?: AIOptions,
-    existingItemId?: string
+    existingItemId?: string,
+    targetNodeId?: string
   ) => {
     // Get source items (single or multiple)
     const sourceIds = Array.isArray(sourceItemId) ? sourceItemId : [sourceItemId];
@@ -652,18 +655,34 @@ const App: React.FC = () => {
     // Use first item as primary for positioning
     const sourceItem = sourceItems[0];
 
+    // If targetNodeId is set, check if it's a folder/stack
+    let targetSpaceId = activeSpaceId;
+    if (targetNodeId) {
+      const targetNode = activeSpace.items.find(i => i.id === targetNodeId);
+      if (targetNode?.type === 'folder' && targetNode.linkedSpaceId) {
+        console.log('[App] Routing AI content to stack space:', targetNode.linkedSpaceId);
+        targetSpaceId = targetNode.linkedSpaceId;
+      }
+    }
+
     // Use existing item or create new placeholder
     const newItemId = existingItemId || `ai-${Date.now()}`;
+
+    // Determine initial type from options
+    const initialType = options?.outputType === 'image' ? 'note' : (options?.outputType || 'note');
+    const [width, height] = initialType === 'sticky' ? [200, 200] : [320, 400];
+
     const newItem: SpatialItem = {
       id: newItemId,
-      type: 'note',
+      type: initialType as 'sticky' | 'note',
       x: sourceItem.x + sourceItem.w + 100,
       y: sourceItem.y,
-      w: 320,
-      h: 400,
+      w: width,
+      h: height,
       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
       rotation: (Math.random() - 0.5) * 4,
       content: '<p>Generating...</p>',
+      color: initialType === 'sticky' ? 'bg-yellow-200' : undefined,
       metadata: {
         isGenerating: true,
         prompt,
@@ -672,21 +691,27 @@ const App: React.FC = () => {
       }
     };
 
-    // Add new item or update existing item
+    // Add new item or update existing item in target space
     setSpaces(prev => {
-      const existingItem = prev[activeSpaceId].items.find(i => i.id === newItemId);
+      const existingItem = prev[targetSpaceId].items.find(i => i.id === newItemId);
+      const targetSpace = prev[targetSpaceId];
+
+      // Position in target space (center if it's a different space)
+      const finalItem = targetSpaceId !== activeSpaceId
+        ? { ...newItem, x: 0, y: 0 }
+        : newItem;
 
       return {
         ...prev,
-        [activeSpaceId]: {
-          ...prev[activeSpaceId],
+        [targetSpaceId]: {
+          ...targetSpace,
           items: existingItem
-            ? prev[activeSpaceId].items.map(i => i.id === newItemId ? { ...i, ...newItem } : i)
-            : [...prev[activeSpaceId].items, newItem],
-          connections: existingItem
-            ? prev[activeSpaceId].connections
+            ? targetSpace.items.map(i => i.id === newItemId ? { ...i, ...finalItem } : i)
+            : [...targetSpace.items, finalItem],
+          connections: existingItem || targetSpaceId !== activeSpaceId
+            ? targetSpace.connections
             : [
-                ...(prev[activeSpaceId].connections || []),
+                ...(targetSpace.connections || []),
                 {
                   id: `conn-${Date.now()}`,
                   from: sourceItemId,
@@ -742,18 +767,18 @@ const App: React.FC = () => {
           .replace(/\s*```$/m, '');
 
         setSpaces(prev => {
-          // Check if item still exists (may have been deleted during generation)
-          const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+          // Check if item exists in target space
+          const itemExists = prev[targetSpaceId].items.some(i => i.id === newItemId);
           if (!itemExists) {
             console.log('[App] AI generation item was deleted, skipping update');
-            return prev; // Don't update if item was deleted
+            return prev;
           }
 
           return {
             ...prev,
-            [activeSpaceId]: {
-              ...prev[activeSpaceId],
-              items: prev[activeSpaceId].items.map(item =>
+            [targetSpaceId]: {
+              ...prev[targetSpaceId],
+              items: prev[targetSpaceId].items.map(item =>
                 item.id === newItemId
                   ? { ...item, content: cleanedContent }
                   : item
@@ -804,9 +829,9 @@ const App: React.FC = () => {
 
           setSpaces(prev => ({
             ...prev,
-            [activeSpaceId]: {
-              ...prev[activeSpaceId],
-              items: [...prev[activeSpaceId].items.filter(i => i.id !== newItemId), imageItem]
+            [targetSpaceId]: {
+              ...prev[targetSpaceId],
+              items: [...prev[targetSpaceId].items.filter(i => i.id !== newItemId), imageItem]
             }
           }));
 
@@ -822,34 +847,42 @@ const App: React.FC = () => {
         await generateTextStream(fullPrompt, updateContent, { systemPrompt: AI_FORMAT_SYSTEM_PROMPT, provider: selectedProvider });
       }
 
-      // Parse final response for format tags
-      const responses = parseAIResponse(fullContent);
+      // Only parse format tags if outputType is 'auto' - otherwise respect user's choice
+      console.log('[App] Checking parseAIResponse:', { outputType: options?.outputType, willParse: options?.outputType === 'auto' });
 
-      if (responses.length > 1 || responses[0].format !== 'text') {
-        // Multiple items or special format - replace placeholder
-        const generatedItems = responses.map((resp, idx) => createItemFromAIResponse(resp, sourceItem, idx));
+      if (options?.outputType === 'auto') {
+        const responses = parseAIResponse(fullContent);
+        console.log('[App] Parsed responses:', responses.map(r => ({ format: r.format, length: r.content.length })));
 
-        setSpaces(prev => ({
-          ...prev,
-          [activeSpaceId]: {
-            ...prev[activeSpaceId],
-            items: [...prev[activeSpaceId].items.filter(i => i.id !== newItemId), ...generatedItems],
-            connections: [
-              ...(prev[activeSpaceId].connections || []),
-              ...generatedItems.map(item => ({
-                id: `conn-${Date.now()}-${item.id}`,
-                from: sourceIds[0],
-                to: item.id
-              }))
-            ]
-          }
-        }));
-        return;
+        if (responses.length > 1 || responses[0].format !== 'text') {
+          // Multiple items or special format - replace placeholder
+          const generatedItems = responses.map((resp, idx) => createItemFromAIResponse(resp, sourceItem, idx));
+          console.log('[App] Replacing placeholder with parsed items:', generatedItems.map(i => i.type));
+
+          setSpaces(prev => ({
+            ...prev,
+            [targetSpaceId]: {
+              ...prev[targetSpaceId],
+              items: [...prev[targetSpaceId].items.filter(i => i.id !== newItemId), ...generatedItems],
+              connections: targetSpaceId === activeSpaceId
+                ? [
+                    ...(prev[targetSpaceId].connections || []),
+                    ...generatedItems.map(item => ({
+                      id: `conn-${Date.now()}-${item.id}`,
+                      from: sourceIds[0],
+                      to: item.id
+                    }))
+                  ]
+                : prev[targetSpaceId].connections
+            }
+          }));
+          return;
+        }
       }
 
       // Mark as complete
       setSpaces(prev => {
-        const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+        const itemExists = prev[targetSpaceId].items.some(i => i.id === newItemId);
         if (!itemExists) {
           console.log('[App] AI generation item was deleted, skipping completion update');
           return prev;
@@ -857,9 +890,9 @@ const App: React.FC = () => {
 
         return {
           ...prev,
-          [activeSpaceId]: {
-            ...prev[activeSpaceId],
-            items: prev[activeSpaceId].items.map(item =>
+          [targetSpaceId]: {
+            ...prev[targetSpaceId],
+            items: prev[targetSpaceId].items.map(item =>
               item.id === newItemId
                 ? { ...item, metadata: { ...item.metadata, isGenerating: false, usedTools: hasTools } }
                 : item
@@ -873,7 +906,7 @@ const App: React.FC = () => {
 
       // Update with detailed error message
       setSpaces(prev => {
-        const itemExists = prev[activeSpaceId].items.some(i => i.id === newItemId);
+        const itemExists = prev[targetSpaceId].items.some(i => i.id === newItemId);
         if (!itemExists) {
           console.log('[App] AI generation item was deleted, skipping error update');
           return prev;
@@ -881,9 +914,9 @@ const App: React.FC = () => {
 
         return {
           ...prev,
-          [activeSpaceId]: {
-            ...prev[activeSpaceId],
-            items: prev[activeSpaceId].items.map(item =>
+          [targetSpaceId]: {
+            ...prev[targetSpaceId],
+            items: prev[targetSpaceId].items.map(item =>
               item.id === newItemId
                 ? {
                     ...item,
@@ -1484,6 +1517,19 @@ const App: React.FC = () => {
               onSelectionChange={setSelection}
               onUpdateItems={updateItems}
               onNavigate={handleNavigate}
+              highlightedNodeId={highlightedNodeId}
+              onNodeClick={aiPromptState?.targetNodeId ? (itemId) => {
+                // Change AI prompt target to clicked node
+                console.log('[App] Changing AI target to:', itemId);
+                setHighlightedNodeId(itemId);
+                setAIPromptState({ ...aiPromptState, targetNodeId: itemId });
+              } : undefined}
+              onBlankCanvasClick={aiPromptState ? () => {
+                // Clear AI prompt when clicking blank canvas
+                console.log('[App] Blank canvas click, clearing AI prompt');
+                setAIPromptState(null);
+                setHighlightedNodeId(null);
+              } : undefined}
               onOpenMedia={(item, rect) => {
                 setMediaViewerRect(rect);
                 setMediaViewerItem(item);
@@ -1509,6 +1555,9 @@ const App: React.FC = () => {
                 );
               }}
               onAIPromptStart={(itemId, position) => {
+                // Always start with normal flow - no smart routing
+                // Smart routing is disabled until we can fix the UX issues
+                setHighlightedNodeId(null);
                 setAIPromptState({ itemId, position, mode: 'single' });
               }}
               onCameraChange={(camera) => {
@@ -1860,11 +1909,29 @@ const App: React.FC = () => {
               ? `${sourceItem.type}: ${sourceItem.metadata?.description || 'visual content'}`
               : sourceItem.content.replace(/<[^>]*>/g, '').slice(0, 50) + (sourceItem.content.length > 50 ? '...' : ''))
           : '';
+
+        // Get target node label if routing to existing connection
+        const targetNode = aiPromptState.targetNodeId
+          ? activeSpace.items.find(i => i.id === aiPromptState.targetNodeId)
+          : undefined;
+        const targetLabel = targetNode
+          ? (targetNode.type === 'folder'
+              ? `Stack: ${targetNode.metadata?.name || 'Untitled'}`
+              : `${targetNode.type}: ${targetNode.content.replace(/<[^>]*>/g, '').slice(0, 30)}...`)
+          : undefined;
+
         return (
           <AIChat
             position={aiPromptState.position}
             placeholder={`Ask AI about: ${sourcePreview || 'this item'}...`}
             initialExpanded={false}
+            targetNodeLabel={targetLabel}
+            disableBackdropClose={!!aiPromptState.targetNodeId}
+            onTargetNodeClick={() => {
+              // Clear target, revert to normal mode
+              setHighlightedNodeId(null);
+              setAIPromptState({ ...aiPromptState, targetNodeId: undefined });
+            }}
             onSubmit={(prompt, options) => {
               if (aiPromptState.itemId) {
                 // If source is an image and output type is auto, default to image mode
@@ -1872,11 +1939,21 @@ const App: React.FC = () => {
                   console.log('[App] Source is image, forcing image mode');
                   options = { ...options, outputType: 'image' };
                 }
-                handleAIGeneration(aiPromptState.itemId, prompt, options);
+                handleAIGeneration(
+                  aiPromptState.itemId,
+                  prompt,
+                  options,
+                  undefined,
+                  aiPromptState.targetNodeId
+                );
               }
               setAIPromptState(null);
+              setHighlightedNodeId(null);
             }}
-            onClose={() => setAIPromptState(null)}
+            onClose={() => {
+              setAIPromptState(null);
+              setHighlightedNodeId(null);
+            }}
           />
         );
       })()}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { SpatialItem } from '../types';
 
 interface Props {
@@ -7,22 +7,46 @@ interface Props {
 }
 
 export const StickyComponent: React.FC<Props> = ({ item, onChange }) => {
-  // Default to yellow if no color is set
+  const contentRef = useRef<HTMLDivElement>(null);
   const bgColor = item.color || 'bg-yellow-200';
-  
-  // Determine placeholder color based on background to ensure contrast (simplified logic)
+
   const isDark = bgColor.includes('gray-800') || bgColor.includes('black');
-  const placeholderColor = isDark ? 'placeholder-white/40 text-white' : 'placeholder-yellow-600/50 text-gray-800';
+  const textColor = isDark ? 'text-white' : 'text-gray-800';
+
+  // Sync content from props
+  useEffect(() => {
+    if (contentRef.current && contentRef.current.innerHTML !== item.content) {
+      contentRef.current.innerHTML = item.content;
+    }
+  }, [item.content]);
+
+  const handleInput = () => {
+    if (contentRef.current) {
+      onChange(contentRef.current.innerHTML);
+    }
+  };
 
   return (
     <div className={`w-full h-full p-4 flex flex-col transition-colors duration-300 ${bgColor}`}>
-      <textarea
-        className={`w-full h-full bg-transparent resize-none border-none outline-none font-handwriting text-base leading-snug uppercase ${placeholderColor}`}
-        value={item.content}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Write a thought..."
-        onMouseDown={(e) => e.stopPropagation()} // Allow interaction with text without dragging immediately
+      <div
+        ref={contentRef}
+        className={`w-full h-full bg-transparent resize-none border-none outline-none font-handwriting text-base leading-snug ${textColor}`}
+        contentEditable
+        onInput={handleInput}
+        onMouseDown={(e) => e.stopPropagation()}
+        suppressContentEditableWarning
       />
+
+      <style>{`
+        [contenteditable]:empty:before {
+          content: 'Write a thought...';
+          color: ${isDark ? 'rgba(255,255,255,0.4)' : 'rgba(202,138,4,0.5)'};
+          pointer-events: none;
+        }
+        .font-handwriting p { margin-bottom: 0.5em; }
+        .font-handwriting strong { font-weight: 700; }
+        .font-handwriting em { font-style: italic; }
+      `}</style>
     </div>
   );
 };

@@ -23,6 +23,9 @@ interface CanvasProps {
   onAIPromptStart: (itemId: string, position: { x: number; y: number }) => void;
   onCameraChange?: (camera: { x: number; y: number; zoom: number }) => void;
   onAutoArrange?: (layoutType: LayoutType, sortBy: SortOption, selectedIds: Set<string>) => void;
+  highlightedNodeId?: string | null; // For showing target node highlight
+  onNodeClick?: (itemId: string) => void; // For changing AI target destination
+  onBlankCanvasClick?: () => void; // For clearing AI prompt
 }
 
 // Sort items by the given option
@@ -211,6 +214,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   onAIPromptStart,
   onCameraChange,
   onAutoArrange,
+  highlightedNodeId,
+  onNodeClick,
+  onBlankCanvasClick,
 }) => {
   // Camera State
   const [camera, setCamera] = useState(initialCamera);
@@ -407,6 +413,12 @@ export const Canvas: React.FC<CanvasProps> = ({
     const isPanTrigger = e.button === 1 || isSpacePressed;
 
     if (e.target === canvasRef.current || (e.target as HTMLElement).id === 'canvas-bg') {
+        // If onBlankCanvasClick is set (AI prompt mode), clear the AI prompt
+        if (onBlankCanvasClick && e.button === 0 && !isPanTrigger) {
+          onBlankCanvasClick();
+          return;
+        }
+
         if (isPanTrigger) {
             setIsPanning(true);
             setLastMousePos({ x: e.clientX, y: e.clientY });
@@ -429,6 +441,12 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleItemMouseDown = (e: React.MouseEvent, itemId: string) => {
     e.stopPropagation();
+
+    // If onNodeClick is set (AI target mode), intercept clicks to change destination
+    if (onNodeClick) {
+      onNodeClick(itemId);
+      return;
+    }
 
     // Store initial positions for absolute-position-based dragging
     const itemsToDrag = selection.has(itemId)
@@ -917,9 +935,11 @@ export const Canvas: React.FC<CanvasProps> = ({
               key={item.id}
               item={visualItem}
               isSelected={selection.has(item.id)}
+              isHighlighted={highlightedNodeId === item.id}
               isDragging={draggingId === item.id}
               isResizing={resizingId === item.id}
               dragTilt={draggingId === item.id ? dragTilt : 0}
+              zoom={camera.zoom}
               onMouseDown={(e) => handleItemMouseDown(e, item.id)}
               onResizeStart={handleResizeStart}
               onNavigate={onNavigate}
