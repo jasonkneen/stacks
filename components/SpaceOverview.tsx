@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Space, SpatialItem } from '../types';
-import { Plus, X } from 'lucide-react';
+import { SquarePlus, X } from 'lucide-react';
 
 interface Props {
   spaces: Space[];
@@ -143,10 +143,10 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
             border: '2px dashed rgba(100, 116, 139, 0.3)'
           }}
         >
-          {/* Center Plus Icon */}
+          {/* Center Icon */}
           <div className="w-full h-full flex items-center justify-center">
-            <div className="rounded-full bg-gray-200/50 p-6 transition-all duration-300 hover:bg-gray-300/50">
-              <Plus size={48} className="text-gray-400" strokeWidth={2} />
+            <div className="rounded-2xl bg-gray-200/50 p-6 transition-all duration-300 hover:bg-gray-300/50">
+              <SquarePlus size={48} className="text-gray-400" strokeWidth={1.5} />
             </div>
           </div>
         </div>

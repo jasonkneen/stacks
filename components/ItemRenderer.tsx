@@ -131,6 +131,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             onDoubleClick={() => item.linkedSpaceId && onNavigate(item.linkedSpaceId)}
             onEditName={() => onEditFolderName(item)}
             getSpaceItems={getSpaceItems}
+            zoom={zoom}
           />
         );
       default:

@@ -1,45 +1,34 @@
 {
-  "name": "spatial",
+  "name": "stacks",
   "version": "0.1.0",
-  "description": "Spatial canvas workspace for notes, images, and AI-powered organization",
+  "description": "Stacks - AI-powered infinite canvas for notes, images, and creative organization",
   "author": "Jason Kneen",
   "license": "MIT",
   "type": "module",
   "main": "electron/main.cjs",
   "bin": {
-    "spatial": "./bin/spatial.cjs"
+    "stacks": "./bin/stacks.cjs"
   },
   "files": [
     "bin/",
     "dist/",
     "electron/",
-    "mcp/",
-    "components/",
-    "hooks/",
-    "utils/",
-    "types.ts",
-    "index.tsx",
-    "index.html",
-    "App.tsx",
-    "package.json",
-    "vite.config.ts",
-    "tsconfig.json",
-    "tsconfig.mcp.json",
     "README.md"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:prod": "npm run clean && NODE_ENV=production vite build",
+    "build": "vite build && npm run mcp:build",
+    "build:prod": "npm run clean && NODE_ENV=production vite build && npm run mcp:build",
     "preview": "vite preview",
     "clean": "rm -rf dist node_modules/.vite",
-    "electron": "npx electron .",
-    "electron:dev": "NODE_ENV=development npx electron .",
+    "electron": "electron .",
+    "electron:dev": "NODE_ENV=development electron .",
+    "prepublishOnly": "npm run build:prod",
     "mcp:dev": "tsx watch mcp/server.ts",
     "mcp:build": "tsc -p tsconfig.mcp.json",
     "mcp:start": "node dist/mcp/server.js",
     "mcp:proxy": "tsx mcp/proxy.ts",
-    "mcp:proxy:build": "tsc -p tsconfig.mcp.json && mv dist/mcp/proxy.js dist/mcp/proxy.js 2>/dev/null || true"
+    "mcp:proxy:start": "node dist/mcp/proxy.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.2",
@@ -62,10 +51,14 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.14.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "electron": "^39.2.4",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "web-worker": "^1.5.0"

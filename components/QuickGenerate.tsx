@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { X, Loader2, Upload } from 'lucide-react';
+import { X, Loader2, Upload, Mic } from 'lucide-react';
 
 type Mode = 'image' | 'video' | 'audio';
 
@@ -201,7 +201,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
 
           const transcription = response.text;
           if (transcription) {
-            onGenerate('note', `<h1>Transcription</h1><p>${transcription}</p>`);
+            onGenerate('note', `<p>${transcription}</p>`, { title: 'Transcription', source: 'audio' });
             onClose();
           }
         } catch (e: any) {

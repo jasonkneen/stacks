@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Sparkles, ChevronDown, Image as ImageIcon, FileText, StickyNote, X } from 'lucide-react';
+import { Send, Sparkles, ChevronDown, Image as ImageIcon, FileText, StickyNote, X, Video, Mic } from 'lucide-react';
 
 export type AIResponseFormat = 'text' | 'sticky' | 'note' | 'image' | 'document';
 
@@ -14,7 +14,7 @@ export interface AIResponse {
 }
 
 export interface AIOptions {
-  outputType?: 'auto' | 'sticky' | 'note' | 'image';
+  outputType?: 'auto' | 'sticky' | 'note' | 'image' | 'video' | 'audio';
   imageResolution?: '512x512' | '1024x1024' | '1024x1792' | '1792x1024';
   imageStyle?: 'natural' | 'vivid';
 }
@@ -262,7 +262,9 @@ export const AIChat: React.FC<Props> = ({
     auto: <Sparkles size={14} />,
     sticky: <StickyNote size={14} />,
     note: <FileText size={14} />,
-    image: <ImageIcon size={14} />
+    image: <ImageIcon size={14} />,
+    video: <Video size={14} />,
+    audio: <Mic size={14} />
   };
 
   return (
@@ -339,7 +341,7 @@ export const AIChat: React.FC<Props> = ({
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-medium text-gray-500 w-16">Output:</span>
                 <div className="flex gap-1">
-                  {(['auto', 'sticky', 'note', 'image'] as const).map((type) => (
+                  {(['auto', 'sticky', 'note', 'image', 'video', 'audio'] as const).map((type) => (
                     <button
                       key={type}
                       type="button"

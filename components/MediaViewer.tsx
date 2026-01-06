@@ -1,17 +1,25 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SpatialItem } from '../types';
-import { X, Loader2, Sparkles, Send } from 'lucide-react';
+import { X, Loader2, Sparkles, Send, ChevronLeft, ChevronRight } from 'lucide-react';
 import { isMediaId, getMediaURL } from '../lib/mediaStorage';
+import { generateImage } from '../utils/imageGeneration';
+
+interface Variant {
+  url: string;
+  prompt?: string;
+  isOriginal?: boolean;
+}
 
 interface Props {
   item: SpatialItem;
   sourceRect: DOMRect | null;
   onClose: () => void;
   onCreateVariant: (originalItem: SpatialItem, variantUrl: string, prompt: string) => void;
+  onCloseWithVariants?: (originalItem: SpatialItem, variants: Variant[]) => void;
   onAnalyze?: (itemId: string, imageUrl: string) => void;
 }
 
-export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCreateVariant, onAnalyze }) => {
+export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCreateVariant, onCloseWithVariants, onAnalyze }) => {
   const [loaded, setLoaded] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -21,16 +29,43 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
 
-  // Resolve media ID to object URL if needed
+  // Variant navigation state
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Initialize variants with original image
   useEffect(() => {
-    if (isMediaId(item.content)) {
-      getMediaURL(item.content).then(url => {
-        if (url) setResolvedSrc(url);
-      });
-    } else {
-      setResolvedSrc(item.content);
-    }
+    const initVariants = async () => {
+      let originalUrl = item.content;
+      if (isMediaId(item.content)) {
+        const url = await getMediaURL(item.content);
+        if (url) originalUrl = url;
+      }
+      setVariants([{ url: originalUrl, isOriginal: true }]);
+      setResolvedSrc(originalUrl);
+    };
+    initVariants();
   }, [item.content]);
+
+  // Get current displayed image
+  const currentVariant = variants[currentIndex] || variants[0];
+
+  // Resolve media ID to object URL if needed (for original only, variants are already URLs)
+  useEffect(() => {
+    if (currentVariant?.url) {
+      if (isMediaId(currentVariant.url)) {
+        getMediaURL(currentVariant.url).then(url => {
+          if (url) setResolvedSrc(url);
+        });
+      } else {
+        setResolvedSrc(currentVariant.url);
+      }
+      // Reset loaded state when changing variants
+      if (!currentVariant.isOriginal) {
+        setLoaded(false);
+      }
+    }
+  }, [currentVariant]);
 
   // Get analysis data from metadata
   const description = item.metadata?.description as string | undefined;
@@ -80,18 +115,30 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
     }
   }, [isAnimating]);
 
-  // Close on Escape
+  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isGenerating) handleClose();
+      if (e.key === 'ArrowLeft' && variants.length > 1) {
+        setCurrentIndex(prev => Math.max(0, prev - 1));
+      }
+      if (e.key === 'ArrowRight' && variants.length > 1) {
+        setCurrentIndex(prev => Math.min(variants.length - 1, prev + 1));
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [isGenerating]);
+  }, [isGenerating, variants.length]);
 
   const handleClose = () => {
     setIsClosing(true);
-    setTimeout(() => onClose(), 350);
+
+    // If we have multiple variants, trigger stack creation
+    if (variants.length > 1 && onCloseWithVariants) {
+      setTimeout(() => onCloseWithVariants(item, variants), 350);
+    } else {
+      setTimeout(() => onClose(), 350);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,12 +147,30 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
 
     setIsGenerating(true);
 
-    setTimeout(() => {
-      const variantUrl = `https://picsum.photos/800/600?random=${Date.now()}`;
-      onCreateVariant(item, variantUrl, prompt);
+    try {
+      // Get selected provider from settings
+      const selectedProvider = (localStorage.getItem('ai-provider') || 'google') as 'openai' | 'google';
+
+      // Generate new image variant using AI
+      const variantUrl = await generateImage(prompt, {
+        sourceImage: resolvedSrc,
+        provider: selectedProvider
+      });
+
+      // Add to variants array
+      const newVariant: Variant = { url: variantUrl, prompt };
+      setVariants(prev => [...prev, newVariant]);
+
+      // Navigate to the new variant
+      setCurrentIndex(variants.length);
+
       setPrompt('');
+    } catch (error) {
+      console.error('[MediaViewer] Generation failed:', error);
+      // TODO: Show error to user
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
   };
 
   const target = getTargetRect();
@@ -197,7 +262,28 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
           />
         )}
 
-        </div>
+        {/* Variant Navigation - Left/Right Buttons */}
+        {variants.length > 1 && !showAtSource && (
+          <>
+            {currentIndex > 0 && (
+              <button
+                onClick={() => setCurrentIndex(prev => prev - 1)}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors"
+              >
+                <ChevronLeft size={24} className="text-white" />
+              </button>
+            )}
+            {currentIndex < variants.length - 1 && (
+              <button
+                onClick={() => setCurrentIndex(prev => prev + 1)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors"
+              >
+                <ChevronRight size={24} className="text-white" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Color Palette - Outside Left of Image */}
       {colors.length > 0 && !showAtSource && (
@@ -220,6 +306,45 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
         </div>
       )}
 
+      {/* Variant Indicator - Below Image */}
+      {variants.length > 1 && !showAtSource && (
+        <div
+          className="fixed z-[115] transition-all duration-300"
+          style={{
+            left: target.x + target.w / 2,
+            top: target.y + target.h + 16,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl rounded-full px-4 py-2">
+            {/* Dots indicator */}
+            <div className="flex items-center gap-1.5">
+              {variants.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`transition-all duration-200 rounded-full ${
+                    idx === currentIndex
+                      ? 'w-6 h-2 bg-white'
+                      : 'w-2 h-2 bg-white/40 hover:bg-white/60'
+                  }`}
+                />
+              ))}
+            </div>
+            {/* Count indicator */}
+            <span className="text-white/70 text-xs font-mono">
+              {currentIndex + 1} of {variants.length}
+            </span>
+          </div>
+          {/* Current variant prompt */}
+          {currentVariant?.prompt && (
+            <p className="text-white/50 text-xs text-center mt-2 max-w-xs">
+              "{currentVariant.prompt}"
+            </p>
+          )}
+        </div>
+      )}
+
       {/* AI Chat Input */}
       <div
         className={`absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 transition-all duration-300 ${
@@ -227,7 +352,7 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
         }`}
       >
         {/* Description */}
-        {item.type === 'image' && (
+        {item.type === 'image' && currentIndex === 0 && (
           <div className="mb-4 text-center">
             {isAnalyzing ? (
               <div className="flex items-center justify-center gap-2 text-white/50 text-sm">

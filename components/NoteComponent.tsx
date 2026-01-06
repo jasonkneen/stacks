@@ -13,8 +13,11 @@ export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Extract title from content (memoized to avoid DOMParser on every render)
+  // Extract title from metadata or content (memoized to avoid DOMParser on every render)
   const title = useMemo(() => {
+    // Use metadata title if available
+    if (item.metadata?.title) return item.metadata.title as string;
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(item.content, 'text/html');
     const h1 = doc.querySelector('h1');
@@ -23,7 +26,7 @@ export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote
     if (h2) return h2.textContent || 'Untitled';
     const text = doc.body.textContent || '';
     return text.slice(0, 30) + (text.length > 30 ? '...' : '') || 'Untitled';
-  }, [item.content]);
+  }, [item.content, item.metadata?.title]);
 
   const handleOpenViewer = () => {
     if (containerRef.current && onOpenNote) {

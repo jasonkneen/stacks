@@ -220,7 +220,7 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
                 
                 const transcription = response.text;
                 if (transcription) {
-                    onGenerate('note', `<h1>Transcription</h1><p>${transcription}</p>`);
+                    onGenerate('note', `<p>${transcription}</p>`, { title: 'Transcription', source: 'audio' });
                     onClose();
                 }
             } catch (e: any) {

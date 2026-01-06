@@ -15,11 +15,11 @@ import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
-import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus, X, LayoutGrid, Zap, Settings, Video, Mic } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
-import { storeFile } from './lib/mediaStorage';
+import { storeFile, isMediaId, getMediaURL } from './lib/mediaStorage';
 import {
   PaperTexture,
   MeshGradient,
@@ -233,10 +233,32 @@ const App: React.FC = () => {
       }
     }));
 
+    // Resolve media ID to actual URL if needed
+    let resolvedUrl = imageUrl;
+    if (isMediaId(imageUrl)) {
+      const objectUrl = await getMediaURL(imageUrl);
+      if (!objectUrl) {
+        console.error('[App] Failed to resolve media ID:', imageUrl);
+        setSpaces(prev => ({
+          ...prev,
+          [targetSpaceId]: {
+            ...prev[targetSpaceId],
+            items: prev[targetSpaceId].items.map(item =>
+              item.id === itemId
+                ? { ...item, metadata: { ...item.metadata, isAnalyzing: false } }
+                : item
+            )
+          }
+        }));
+        return;
+      }
+      resolvedUrl = objectUrl;
+    }
+
     // Run analysis
     let analysis;
     try {
-      analysis = await analyzeImage(imageUrl);
+      analysis = await analyzeImage(resolvedUrl);
       console.log('[App] Analysis complete:', { colors: analysis.colors.length, hasDescription: !!analysis.description });
     } catch (error) {
       console.error('[App] Analysis failed:', error);
@@ -1502,7 +1524,7 @@ const App: React.FC = () => {
 
       {/* Persistent Navigation (Top Left) - Hidden in overview */}
       {!showOverview && (
-        <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
+        <div className="absolute left-4 z-50 flex items-center gap-2" style={{ top: 62 }}>
           {activeSpace.parentId && (
             <button
               onClick={handleBack}
@@ -1534,7 +1556,7 @@ const App: React.FC = () => {
 
       {/* Auto Arrange Button - Top Center */}
       {!showOverview && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+        <div className="absolute left-1/2 -translate-x-1/2 z-50" style={{ top: 62 }}>
           <AutoArrangeButton
             layoutType={activeSpace.layoutType || 'grid'}
             sortBy={activeSpace.sortBy || 'updated'}
@@ -1718,7 +1740,7 @@ const App: React.FC = () => {
 
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
-        <div className="absolute bottom-8 right-8 flex items-center gap-3 z-50">
+        <div className="absolute right-8 flex items-center gap-3 z-50" style={{ bottom: 8 }}>
           {/* New Space Button */}
           <button
             className="bg-white/40 backdrop-blur-md p-3.5 rounded-2xl hover:bg-white/50 text-gray-800 transition-all shadow-lg hover:scale-105 active:scale-95 border border-white/60"
@@ -1740,7 +1762,7 @@ const App: React.FC = () => {
             }}
             title="New Space"
           >
-            <FolderPlus size={20} />
+            <SquarePlus size={20} />
           </button>
 
           {/* Space Indicator */}
@@ -1929,7 +1951,7 @@ const App: React.FC = () => {
                     setShowAddMenu(false);
                   }}
                 >
-                  <FolderPlus size={18} />
+                  <Layers size={18} />
                   <span className="text-sm">Stack</span>
                 </button>
               </div>
@@ -1989,7 +2011,8 @@ const App: React.FC = () => {
       {/* Settings Button - Top Right */}
       {!showOverview && (
         <button
-          className="absolute top-4 right-4 p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60 z-50"
+          className="absolute right-4 p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60 z-50"
+          style={{ top: 62 }}
           onClick={() => setShowSettings(true)}
           title="Settings"
         >
@@ -2129,6 +2152,85 @@ const App: React.FC = () => {
               setMediaViewerRect(null);
             }}
             onCreateVariant={handleCreateVariant}
+            onCloseWithVariants={(originalItem, variants) => {
+              // Close viewer first
+              setMediaViewerItem(null);
+              setMediaViewerRect(null);
+
+              // Create a stack from the variants
+              if (variants.length > 1) {
+                const now = Date.now();
+                const newSpaceId = `variants-${now}`;
+
+                // Create items for each variant
+                const variantItems: SpatialItem[] = variants.map((variant, index) => ({
+                  id: `variant-${now}-${index}`,
+                  type: originalItem.type,
+                  x: (index % 3) * 40 - 40,
+                  y: Math.floor(index / 3) * 40 - 40,
+                  w: originalItem.w,
+                  h: originalItem.h,
+                  zIndex: index + 1,
+                  rotation: (Math.random() - 0.5) * 4,
+                  content: variant.isOriginal ? originalItem.content : variant.url,
+                  metadata: {
+                    ...originalItem.metadata,
+                    prompt: variant.prompt,
+                    isVariant: !variant.isOriginal,
+                    originalId: variant.isOriginal ? undefined : originalItem.id,
+                    createdAt: now,
+                    updatedAt: now
+                  }
+                }));
+
+                // Create folder to replace original
+                const folderItem: SpatialItem = {
+                  id: `folder-${now}`,
+                  type: 'folder',
+                  x: originalItem.x,
+                  y: originalItem.y,
+                  w: 200,
+                  h: 240,
+                  zIndex: originalItem.zIndex,
+                  rotation: 0,
+                  content: `Variants (${variants.length})`,
+                  linkedSpaceId: newSpaceId
+                };
+
+                setSpaces(prev => {
+                  const space = prev[activeSpaceId];
+
+                  // Remove original, add folder
+                  const newItems = space.items.map(i =>
+                    i.id === originalItem.id ? folderItem : i
+                  );
+
+                  // Update connections to point to folder
+                  const newConnections = (space.connections || []).map(conn => ({
+                    ...conn,
+                    from: conn.from === originalItem.id ? folderItem.id : conn.from,
+                    to: conn.to === originalItem.id ? folderItem.id : conn.to
+                  }));
+
+                  return {
+                    ...prev,
+                    [activeSpaceId]: {
+                      ...space,
+                      items: newItems,
+                      connections: newConnections
+                    },
+                    [newSpaceId]: {
+                      id: newSpaceId,
+                      name: `Variants (${variants.length})`,
+                      parentId: activeSpaceId,
+                      items: variantItems,
+                      connections: [],
+                      camera: { x: 0, y: 0, zoom: 1 }
+                    }
+                  };
+                });
+              }
+            }}
             onAnalyze={analyzeAndUpdateImage}
           />
         );

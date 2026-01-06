@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const net = require('net')
+const fs = require('fs')
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -112,21 +113,24 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      webSecurity: !isDev // Allow local file loading in production
     },
-    title: 'Spatial',
+    title: 'Stacks',
     backgroundColor: '#000000'
   })
 
-  // Load the Vite server URL
-  mainWindow.loadURL(`http://localhost:${serverPort}`)
-
-  // Open DevTools in development
   if (isDev) {
+    // Development: Load from Vite server
+    mainWindow.loadURL(`http://localhost:${serverPort}`)
     mainWindow.webContents.openDevTools()
+  } else {
+    // Production: Load from dist folder
+    const distPath = path.join(__dirname, '..', 'dist', 'index.html')
+    mainWindow.loadFile(distPath)
   }
 
   mainWindow.on('closed', () => {
@@ -135,14 +139,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  startViteServer()
-    .then(() => {
-      createWindow()
-    })
-    .catch((error) => {
-      console.error('Failed to start application:', error)
-      app.quit()
-    })
+  if (isDev) {
+    // Development: Start Vite first
+    startViteServer()
+      .then(() => {
+        createWindow()
+      })
+      .catch((error) => {
+        console.error('Failed to start application:', error)
+        app.quit()
+      })
+  } else {
+    // Production: Load directly from dist
+    createWindow()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -158,7 +168,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  // Kill vite process when app quits
+  // Kill vite process when app quits (dev mode only)
   if (viteProcess && !viteProcess.killed) {
     console.log('Stopping Vite server...')
     viteProcess.kill('SIGTERM')

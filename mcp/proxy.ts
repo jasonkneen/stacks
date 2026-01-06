@@ -43,7 +43,7 @@ interface ClientMessage {
 }
 
 // Config paths
-const configDir = join(homedir(), ".spatial");
+const configDir = join(homedir(), ".stacks");
 const configPath = join(configDir, "mcp-proxy-config.json");
 
 // Default config
@@ -153,7 +153,7 @@ async function connectToServer(serverId: string): Promise<MCPConnection | null> 
       roots: { listChanged: true },
     },
     clientInfo: {
-      name: "spatial-canvas",
+      name: "stacks",
       version: "1.0.0",
     },
   });

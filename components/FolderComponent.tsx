@@ -36,9 +36,10 @@ interface Props {
   onDoubleClick: () => void;
   onEditName: () => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
+  zoom?: number;
 }
 
-export const FolderComponent: React.FC<Props> = memo(({ item, onDoubleClick, onEditName, getSpaceItems }) => {
+export const FolderComponent: React.FC<Props> = memo(({ item, onDoubleClick, onEditName, getSpaceItems, zoom = 1 }) => {
   const linkedItems = useMemo(() => {
     if (!item.linkedSpaceId) return [];
     const items = getSpaceItems(item.linkedSpaceId);
@@ -117,9 +118,13 @@ export const FolderComponent: React.FC<Props> = memo(({ item, onDoubleClick, onE
                     </div>
                 )}
 
-                {/* Label Badge - Floating below */}
+                {/* Label Badge - Floating below, counter-scaled to stay constant size */}
                 <div
-                    className="absolute -bottom-[50px] left-1/2 -translate-x-1/2 z-40 cursor-pointer"
+                    className="absolute -bottom-[50px] left-1/2 z-40 cursor-pointer"
+                    style={{
+                        transform: `translateX(-50%) scale(${1 / zoom})`,
+                        transformOrigin: 'center top'
+                    }}
                     onDoubleClick={(e) => {
                         e.stopPropagation();
                         onEditName();
