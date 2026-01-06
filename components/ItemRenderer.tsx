@@ -98,7 +98,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
               ? 'ring-4 ring-blue-500/50 shadow-2xl z-50'
               : 'shadow-2xl hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]'
         }`
-  } ${isGenerating ? 'animate-pulse ring-4 ring-blue-400/50' : ''}`;
+  } ${isGenerating ? 'generating-glow' : ''}`;
 
   // Calculate final transform
   // 1. Base rotation (random scatter)

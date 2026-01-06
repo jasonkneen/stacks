@@ -697,20 +697,19 @@ const App: React.FC = () => {
     // Use existing item or create new placeholder
     const newItemId = existingItemId || `ai-${Date.now()}`;
 
-    // Determine initial type from options
-    const initialType = options?.outputType === 'image' ? 'note' : (options?.outputType || 'note');
-    const [width, height] = initialType === 'sticky' ? [200, 200] : [320, 400];
+    // Determine initial type from options - use source dimensions for consistency
+    const initialType = options?.outputType === 'image' ? 'image' : (options?.outputType || 'note');
 
     const newItem: SpatialItem = {
       id: newItemId,
-      type: initialType as 'sticky' | 'note',
+      type: initialType as 'sticky' | 'note' | 'image',
       x: sourceItem.x + sourceItem.w + 100,
       y: sourceItem.y,
-      w: width,
-      h: height,
+      w: sourceItem.w,
+      h: sourceItem.h,
       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
       rotation: (Math.random() - 0.5) * 4,
-      content: '<p>Generating...</p>',
+      content: '',
       color: initialType === 'sticky' ? 'bg-yellow-200' : undefined,
       metadata: {
         isGenerating: true,
@@ -823,8 +822,6 @@ const App: React.FC = () => {
 
         const { generateImage } = await import('./utils/imageGeneration');
 
-        updateContent('🎨 Generating image...');
-
         try {
           // Get source image if the selected item is an image (for image-to-image)
           const sourceImageData = sourceItem.type === 'image' ? sourceItem.content : undefined;
@@ -838,14 +835,14 @@ const App: React.FC = () => {
 
           console.log('[App] Image generated, creating image item');
 
-          // Create image item directly
+          // Create image item directly - use source dimensions
           const imageItem: SpatialItem = {
             id: newItemId,
             type: 'image',
             x: sourceItem.x + sourceItem.w + 100,
             y: sourceItem.y,
-            w: 300,
-            h: 250,
+            w: sourceItem.w,
+            h: sourceItem.h,
             zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
             rotation: (Math.random() - 0.5) * 4,
             content: imageUrl,
