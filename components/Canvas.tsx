@@ -252,7 +252,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }> } | null>(null);
+  const dragStartDataRef = useRef<{ mouseX: number; mouseY: number; itemPositions: Map<string, { x: number; y: number }>; grabOffsetX: number; grabOffsetY: number } | null>(null);
   const currentDragOffsetRef = useRef({ x: 0, y: 0 }); // Current offset
   const [dragOffsetTrigger, setDragOffsetTrigger] = useState(0); // Trigger re-render
   const [resizingId, setResizingId] = useState<string | null>(null);
@@ -276,7 +276,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   
   // Physics State
-  const [dragTilt, setDragTilt] = useState(0);
+  const dragTiltRef = useRef(0);
   
   // Inertia State
   const velocityRef = useRef({ x: 0, y: 0 });
@@ -464,10 +464,24 @@ export const Canvas: React.FC<CanvasProps> = ({
       positionMap.set(item.id, { x: item.x, y: item.y });
     });
 
+    // Calculate grab point relative to item center (normalized -1 to 1)
+    const grabbedItem = items.find(i => i.id === itemId);
+    const worldPos = screenToWorld(e.clientX, e.clientY);
+    let grabOffsetX = 0;
+    let grabOffsetY = 0;
+    if (grabbedItem) {
+      const itemCenterX = grabbedItem.x + grabbedItem.w / 2;
+      const itemCenterY = grabbedItem.y + grabbedItem.h / 2;
+      grabOffsetX = (worldPos.x - itemCenterX) / (grabbedItem.w / 2); // -1 (left) to 1 (right)
+      grabOffsetY = (worldPos.y - itemCenterY) / (grabbedItem.h / 2); // -1 (top) to 1 (bottom)
+    }
+
     dragStartDataRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
-      itemPositions: positionMap
+      itemPositions: positionMap,
+      grabOffsetX,
+      grabOffsetY
     };
 
     // Bring to front - use functional update to avoid stale closure bugs
@@ -480,7 +494,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     setDraggingId(itemId);
     setLastMousePos({ x: e.clientX, y: e.clientY });
-    setDragTilt(0);
+    dragTiltRef.current = 0;
     
     // Selection Logic
     if (e.shiftKey) {
@@ -607,9 +621,19 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Drag Item Logic
-        const targetTilt = deltaX * 0.4;
-        setDragTilt(Math.max(Math.min(targetTilt, 12), -12));
+        // Drag Item Logic - smooth tilt with momentum (no swing-back)
+        const targetTilt = Math.max(Math.min(deltaX * 0.5, 15), -15);
+        const currentTilt = dragTiltRef.current;
+
+        // Only approach target if moving in same direction or target is stronger
+        // This prevents swing-back when slowing down
+        if (Math.abs(targetTilt) > Math.abs(currentTilt) || Math.sign(targetTilt) === Math.sign(currentTilt)) {
+            // Quick response when adding tilt
+            dragTiltRef.current = currentTilt + (targetTilt - currentTilt) * 0.3;
+        } else {
+            // Very slow decay - don't swing back during motion
+            dragTiltRef.current = currentTilt * 0.98;
+        }
 
         // Calculate total mouse movement from drag start
         const totalDeltaX = e.clientX - dragStartDataRef.current.mouseX;
@@ -719,7 +743,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         const finalOffset = { ...currentDragOffsetRef.current };
         const itemPositions = new Map(dragStartDataRef.current.itemPositions);
 
-        // Apply final positions (already snapped during drag if close)
+        // Physics-based settle tilt: drag direction determines final tilt
+        // Drag right → settle tilted right (positive rotation)
+        // Drag left → settle tilted left (negative rotation)
+        const settleTilt = dragTiltRef.current * 0.5;
+
+        // Apply final positions and settle rotation based on drag direction
         onUpdateItems(currentItems =>
             currentItems.map(item => {
                 const startPos = itemPositions.get(item.id);
@@ -727,7 +756,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                     return {
                         ...item,
                         x: startPos.x + finalOffset.x,
-                        y: startPos.y + finalOffset.y
+                        y: startPos.y + finalOffset.y,
+                        rotation: item.rotation + settleTilt
                     };
                 }
                 return item;
@@ -782,7 +812,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     dragStartDataRef.current = null;
     currentDragOffsetRef.current = { x: 0, y: 0 };
     selectionBoxRef.current = null;
-    setDragTilt(0);
+    dragTiltRef.current = 0;
     setSelectionBox(null);
   }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia, selectionBox, onSelectionChange]); 
 
@@ -991,7 +1021,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               isHighlighted={highlightedNodeId === item.id}
               isDragging={draggingId === item.id}
               isResizing={resizingId === item.id}
-              dragTilt={draggingId === item.id ? dragTilt : 0}
+              dragTilt={draggingId === item.id ? dragTiltRef.current : 0}
               zoom={camera.zoom}
               onMouseDown={(e) => handleItemMouseDown(e, item.id)}
               onResizeStart={handleResizeStart}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, memo } from 'react';
 import { SpatialItem } from '../types';
-import { Play } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 
 interface Props {
   item: SpatialItem;
@@ -9,11 +9,25 @@ interface Props {
 
 export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) => {
   const [loaded, setLoaded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleDoubleClick = () => {
     if (containerRef.current) {
       onDoubleClick(containerRef.current.getBoundingClientRect());
+    }
+  };
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
     }
   };
 
@@ -45,19 +59,28 @@ export const MediaComponent: React.FC<Props> = memo(({ item, onDoubleClick }) =>
       ) : (
         <div className="w-full h-full relative overflow-hidden">
             <video
+                ref={videoRef}
                 src={item.content}
-                className={`w-full h-full object-cover pointer-events-none opacity-80 transition-opacity duration-500 ${loaded ? 'opacity-80' : 'opacity-0'}`}
+                className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
                 muted
                 loop
                 preload="metadata"
                 playsInline
                 onCanPlay={() => setLoaded(true)}
+                onEnded={() => setIsPlaying(false)}
             />
              {loaded && (
-                <div className="absolute inset-0 flex items-center justify-center animate-space-enter">
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg group-hover:bg-white/40 transition-colors">
-                        <Play fill="white" className="text-white ml-1" size={20} />
-                    </div>
+                <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-200 ${isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'}`}>
+                    <button
+                      onClick={togglePlay}
+                      className="w-14 h-14 bg-white/30 backdrop-blur-md rounded-full flex items-center justify-center shadow-xl hover:bg-white/50 hover:scale-110 transition-all cursor-pointer pointer-events-auto"
+                    >
+                        {isPlaying ? (
+                          <Pause fill="white" className="text-white" size={24} />
+                        ) : (
+                          <Play fill="white" className="text-white ml-1" size={24} />
+                        )}
+                    </button>
                 </div>
              )}
         </div>
