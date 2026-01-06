@@ -1,5 +1,5 @@
 {
-  "name": "stacks",
+  "name": "stacks-ai",
   "version": "0.1.0",
   "description": "Stacks - AI-powered infinite canvas for notes, images, and creative organization",
   "author": "Jason Kneen",
@@ -7,11 +7,14 @@
   "type": "module",
   "main": "electron/main.cjs",
   "bin": {
-    "stacks": "./bin/stacks.cjs"
+    "stacks": "bin/stacks.cjs"
   },
   "files": [
     "bin/",
-    "dist/",
+    "dist/assets/",
+    "dist/fonts/",
+    "dist/index.html",
+    "dist/mcp/*.js",
     "electron/",
     "README.md"
   ],
@@ -28,7 +31,10 @@
     "mcp:build": "tsc -p tsconfig.mcp.json",
     "mcp:start": "node dist/mcp/server.js",
     "mcp:proxy": "tsx mcp/proxy.ts",
-    "mcp:proxy:start": "node dist/mcp/proxy.js"
+    "mcp:proxy:start": "node dist/mcp/proxy.js",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.2",
@@ -57,6 +63,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.23",
+    "electron": "^39.2.7",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
@@ -65,7 +72,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jasonkneen/spatial.git"
+    "url": "git+https://github.com/jasonkneen/spatial.git"
   },
   "keywords": [
     "spatial",

@@ -11,11 +11,12 @@ import { AIPromptPopup } from './components/AIPromptPopup';
 import { AIChat, AIResponse, AIOptions, AI_FORMAT_SYSTEM_PROMPT, parseAIResponse } from './components/AIChat';
 import { QuickGenerate } from './components/QuickGenerate';
 import { AutoArrangeButton } from './components/AutoArrangeButton';
+import { SearchModal } from './components/SearchModal';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
-import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
@@ -171,6 +172,7 @@ const App: React.FC = () => {
   const [showOverview, setShowOverview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [quickGenerateMode, setQuickGenerateMode] = useState<'image' | 'video' | 'audio' | null>(null);
   const [aiPromptState, setAIPromptState] = useState<{
     itemId?: string;
@@ -1426,6 +1428,10 @@ const App: React.FC = () => {
             e.preventDefault();
             setShowOverview(prev => !prev);
           }
+      } else if (e.key === 'k' && e.metaKey) {
+          // Open search with Cmd+K
+          e.preventDefault();
+          setShowSearch(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1527,7 +1533,7 @@ const App: React.FC = () => {
 
       {/* Persistent Navigation (Top Left) - Hidden in overview */}
       {!showOverview && (
-        <div className="absolute left-4 z-50 flex items-center gap-2" style={{ top: 62 }}>
+        <div className="absolute left-4 z-50 flex items-center gap-2" style={{ top: 21 }}>
           {activeSpace.parentId && (
             <button
               onClick={handleBack}
@@ -1554,12 +1560,21 @@ const App: React.FC = () => {
               <Menu size={20} className="text-gray-800" />
             </button>
           )}
+
+          {/* Search Button */}
+          <button
+            onClick={() => setShowSearch(true)}
+            className="p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60"
+            title="Search (⌘K)"
+          >
+            <Search size={20} className="text-gray-800" />
+          </button>
         </div>
       )}
 
       {/* Auto Arrange Button - Top Center */}
       {!showOverview && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-50" style={{ top: 62 }}>
+        <div className="absolute left-1/2 -translate-x-1/2 z-50" style={{ top: 21 }}>
           <AutoArrangeButton
             layoutType={activeSpace.layoutType || 'grid'}
             sortBy={activeSpace.sortBy || 'updated'}
@@ -1743,7 +1758,7 @@ const App: React.FC = () => {
 
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
-        <div className="absolute right-8 flex items-center gap-3 z-50" style={{ bottom: 8 }}>
+        <div className="absolute right-8 flex items-center gap-3 z-50" style={{ bottom: 18 }}>
           {/* New Space Button */}
           <button
             className="bg-white/40 backdrop-blur-md p-3.5 rounded-2xl hover:bg-white/50 text-gray-800 transition-all shadow-lg hover:scale-105 active:scale-95 border border-white/60"
@@ -2015,7 +2030,7 @@ const App: React.FC = () => {
       {!showOverview && (
         <button
           className="absolute right-4 p-2 bg-white/40 backdrop-blur-md rounded-full shadow-lg hover:bg-white/50 transition-colors border border-white/60 z-50"
-          style={{ top: 62 }}
+          style={{ top: 21 }}
           onClick={() => setShowSettings(true)}
           title="Settings"
         >
@@ -2030,6 +2045,28 @@ const App: React.FC = () => {
           onThemeChange={(newTheme) => setTheme(newTheme)}
         />
       )}
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={showSearch}
+        onClose={() => setShowSearch(false)}
+        spaces={Object.values(spaces)}
+        onSelectItem={(item, spaceId) => {
+          // Navigate to the space containing the item
+          setActiveSpaceId(spaceId);
+          setShowSearch(false);
+          // Select the item after a brief delay to allow navigation
+          setTimeout(() => {
+            setSelection(new Set([item.id]));
+            // Scroll/pan to the item
+            setViewport(prev => ({
+              ...prev,
+              x: -item.x + window.innerWidth / 2 - (item.w || 200) / 2,
+              y: -item.y + window.innerHeight / 2 - (item.h || 200) / 2
+            }));
+          }, 100);
+        }}
+      />
 
       {/* AI Chat Popup (from connection handles or selection) */}
       {aiPromptState && (() => {
