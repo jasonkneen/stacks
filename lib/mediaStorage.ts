@@ -198,6 +198,23 @@ export const isMediaId = (str: string): boolean => {
 };
 
 /**
+ * Get metadata for a media item
+ */
+export const getMediaMetadata = async (id: string): Promise<Record<string, unknown> | null> => {
+  const record = await getMedia(id);
+  if (!record) return null;
+
+  return {
+    id: record.id,
+    type: record.type,
+    mimeType: record.mimeType,
+    size: record.size,
+    createdAt: record.createdAt,
+    ...record.metadata
+  };
+};
+
+/**
  * Resolve a content string to a URL (handles both regular URLs and media IDs)
  */
 export const resolveMediaURL = async (content: string): Promise<string> => {

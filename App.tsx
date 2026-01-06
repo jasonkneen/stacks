@@ -514,16 +514,19 @@ const App: React.FC = () => {
       const file = files[i];
       const isVideo = file.type.startsWith('video/');
 
-      // Store file in IndexedDB and get media ID
-      const mediaId = await storeFile(file, { originalName: file.name });
-
-      // Read as data URL only for metadata extraction
+      // Read as data URL for metadata extraction
       const dataUrl = await readFileAsDataUrl(file);
 
-      // Extract detailed metadata
+      // Extract detailed metadata first
       const metadata = isVideo
         ? await extractVideoMetadata(file, dataUrl)
         : await extractImageMetadata(file, dataUrl);
+
+      // Store file in IndexedDB with full metadata
+      const mediaId = await storeFile(file, {
+        originalName: file.name,
+        ...metadata
+      });
 
       newItems.push({
         id: `drop-${now}-${i}`,

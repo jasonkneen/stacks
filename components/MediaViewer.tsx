@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SpatialItem } from '../types';
 import { X, Loader2, Sparkles, Send, ChevronLeft, ChevronRight } from 'lucide-react';
-import { isMediaId, getMediaURL } from '../lib/mediaStorage';
+import { isMediaId, getMediaURL, getMediaMetadata } from '../lib/mediaStorage';
 import { generateImage } from '../utils/imageGeneration';
 
 interface Variant {
@@ -33,13 +33,19 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
   const [variants, setVariants] = useState<Variant[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Initialize variants with original image
+  // IndexedDB metadata (merged with item.metadata)
+  const [dbMetadata, setDbMetadata] = useState<Record<string, unknown> | null>(null);
+
+  // Initialize variants with original image and fetch IndexedDB metadata
   useEffect(() => {
     const initVariants = async () => {
       let originalUrl = item.content;
       if (isMediaId(item.content)) {
         const url = await getMediaURL(item.content);
         if (url) originalUrl = url;
+        // Fetch metadata from IndexedDB
+        const meta = await getMediaMetadata(item.content);
+        if (meta) setDbMetadata(meta);
       }
       setVariants([{ url: originalUrl, isOriginal: true }]);
       setResolvedSrc(originalUrl);
@@ -141,6 +147,23 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
     }
   };
 
+  // Convert object URL or any image URL to base64 data URL
+  const convertToBase64 = async (url: string): Promise<string> => {
+    // Already a data URL
+    if (url.startsWith('data:')) return url;
+
+    // Fetch and convert to base64
+    const response = await fetch(url);
+    const blob = await response.blob();
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || isGenerating) return;
@@ -151,9 +174,13 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
       // Get selected provider from settings
       const selectedProvider = (localStorage.getItem('ai-provider') || 'google') as 'openai' | 'google';
 
+      // Convert current image to base64 for the AI model
+      const base64Image = await convertToBase64(resolvedSrc);
+      console.log('[MediaViewer] Converted image to base64, length:', base64Image.length);
+
       // Generate new image variant using AI
       const variantUrl = await generateImage(prompt, {
-        sourceImage: resolvedSrc,
+        sourceImage: base64Image,
         provider: selectedProvider
       });
 
@@ -226,13 +253,15 @@ export const MediaViewer: React.FC<Props> = ({ item, sourceRect, onClose, onCrea
           <X size={24} />
         </button>
         <div className="flex flex-col items-end gap-1 font-mono text-xs">
-          {item.metadata?.filename && <span className="max-w-xs truncate">{item.metadata.filename as string}</span>}
-          {item.metadata?.size && <span>SIZE {item.metadata.size}</span>}
-          {item.metadata?.dimensions && <span>DIM {item.metadata.dimensions as string}</span>}
-          {item.metadata?.format && <span>FORMAT {item.metadata.format as string}</span>}
-          {item.metadata?.dateTaken && <span>DATE {item.metadata.dateTaken as string}</span>}
-          {item.metadata?.duration && <span>DUR {item.metadata.duration as string}</span>}
-          {item.metadata?.fps && <span>FPS {item.metadata.fps}</span>}
+          {(item.metadata?.filename || dbMetadata?.filename || dbMetadata?.originalName) && (
+            <span className="max-w-xs truncate">{(item.metadata?.filename || dbMetadata?.filename || dbMetadata?.originalName) as string}</span>
+          )}
+          {(item.metadata?.size || dbMetadata?.size) && <span>SIZE {(item.metadata?.size || dbMetadata?.size) as string}</span>}
+          {(item.metadata?.dimensions || dbMetadata?.dimensions) && <span>DIM {(item.metadata?.dimensions || dbMetadata?.dimensions) as string}</span>}
+          {(item.metadata?.format || dbMetadata?.format) && <span>FORMAT {(item.metadata?.format || dbMetadata?.format) as string}</span>}
+          {(item.metadata?.dateTaken || dbMetadata?.dateTaken) && <span>DATE {(item.metadata?.dateTaken || dbMetadata?.dateTaken) as string}</span>}
+          {(item.metadata?.duration || dbMetadata?.duration) && <span>DUR {(item.metadata?.duration || dbMetadata?.duration) as string}</span>}
+          {(item.metadata?.fps || dbMetadata?.fps) && <span>FPS {(item.metadata?.fps || dbMetadata?.fps) as string}</span>}
         </div>
       </div>
 
