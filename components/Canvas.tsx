@@ -534,7 +534,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const worldPos = screenToWorld(e.clientX, e.clientY);
 
-    // Handle resize
+    // Handle resize - FREE resize with magnetic snap
     if (resizingId && resizeStartRef.current) {
         const startData = resizeStartRef.current;
         const deltaMouseX = e.clientX - startData.mouseX;
@@ -545,17 +545,29 @@ export const Canvas: React.FC<CanvasProps> = ({
         const scaledDeltaY = deltaMouseY / camera.zoom;
 
         // Calculate raw new dimensions
-        const rawW = Math.max(GRID_CELL_SIZE * 0.8, startData.w + scaledDeltaX);
-        const rawH = Math.max(GRID_CELL_SIZE * 0.8, startData.h + scaledDeltaY);
+        let newW = Math.max(GRID_CELL_SIZE * 0.5, startData.w + scaledDeltaX);
+        let newH = Math.max(GRID_CELL_SIZE * 0.5, startData.h + scaledDeltaY);
 
-        // Snap to grid multiples
-        const gridCellsX = Math.max(1, Math.round(rawW / GRID_SLOT_SIZE));
-        const gridCellsY = Math.max(1, Math.round(rawH / GRID_SLOT_SIZE));
+        // Magnetic snap during resize
+        const SNAP_TOLERANCE = 30;
+        const gridCellsX = Math.max(1, Math.round(newW / GRID_SLOT_SIZE));
+        const gridCellsY = Math.max(1, Math.round(newH / GRID_SLOT_SIZE));
 
-        const newW = gridCellsX * GRID_SLOT_SIZE - GRID_GAP;
-        const newH = gridCellsY * GRID_SLOT_SIZE - GRID_GAP;
+        const snappedW = gridCellsX * GRID_SLOT_SIZE - GRID_GAP;
+        const snappedH = gridCellsY * GRID_SLOT_SIZE - GRID_GAP;
 
-        // Use functional update and store grid dimensions in metadata
+        const distanceW = Math.abs(newW - snappedW);
+        const distanceH = Math.abs(newH - snappedH);
+
+        // Apply magnetic snap if within tolerance
+        if (distanceW <= SNAP_TOLERANCE) {
+            newW = snappedW;
+        }
+        if (distanceH <= SNAP_TOLERANCE) {
+            newH = snappedH;
+        }
+
+        // Update item with snapped or raw dimensions
         onUpdateItems(currentItems =>
             currentItems.map(item =>
                 item.id === resizingId
@@ -594,9 +606,34 @@ export const Canvas: React.FC<CanvasProps> = ({
         const totalDeltaX = e.clientX - dragStartDataRef.current.mouseX;
         const totalDeltaY = e.clientY - dragStartDataRef.current.mouseY;
 
-        // Convert to world space ONCE
-        const worldDeltaX = totalDeltaX / camera.zoom;
-        const worldDeltaY = totalDeltaY / camera.zoom;
+        // Convert to world space
+        let worldDeltaX = totalDeltaX / camera.zoom;
+        let worldDeltaY = totalDeltaY / camera.zoom;
+
+        // Magnetic snap during drag
+        const SNAP_TOLERANCE = 40;
+        const draggedItem = items.find(i => i.id === draggingId);
+        if (draggedItem) {
+            const startPos = dragStartDataRef.current.itemPositions.get(draggingId);
+            if (startPos) {
+                const currentX = startPos.x + worldDeltaX;
+                const currentY = startPos.y + worldDeltaY;
+
+                const snappedX = Math.round(currentX / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+                const snappedY = Math.round(currentY / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+
+                const distanceX = Math.abs(currentX - snappedX);
+                const distanceY = Math.abs(currentY - snappedY);
+
+                // Apply magnetic snap if within tolerance
+                if (distanceX <= SNAP_TOLERANCE) {
+                    worldDeltaX = snappedX - startPos.x;
+                }
+                if (distanceY <= SNAP_TOLERANCE) {
+                    worldDeltaY = snappedY - startPos.y;
+                }
+            }
+        }
 
         // Store offset in ref and trigger render
         currentDragOffsetRef.current = { x: worldDeltaX, y: worldDeltaY };
@@ -620,7 +657,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [isPanning, draggingId, resizingId, selectionBox, lastMousePos, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
-    // Clear resize state and trigger auto-arrange around resized item
+    // Clear resize state (already snapped during resize if close)
     if (resizingId) {
         const resizedItem = items.find(i => i.id === resizingId);
 
@@ -671,11 +708,16 @@ export const Canvas: React.FC<CanvasProps> = ({
         const finalOffset = { ...currentDragOffsetRef.current };
         const itemPositions = new Map(dragStartDataRef.current.itemPositions);
 
+        // Apply final positions (already snapped during drag if close)
         onUpdateItems(currentItems =>
             currentItems.map(item => {
                 const startPos = itemPositions.get(item.id);
                 if (startPos) {
-                    return { ...item, x: startPos.x + finalOffset.x, y: startPos.y + finalOffset.y };
+                    return {
+                        ...item,
+                        x: startPos.x + finalOffset.x,
+                        y: startPos.y + finalOffset.y
+                    };
                 }
                 return item;
             })

@@ -358,19 +358,47 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
 
                 <div className="pt-4 border-t border-gray-100">
                   <label className="block text-xs font-medium text-gray-700 mb-3">
-                    Wallpaper
+                    Background Shader
                   </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    <button className="aspect-video rounded-lg bg-gradient-to-br from-blue-400 to-purple-500 border-2 border-transparent hover:border-gray-900 transition-all" />
-                    <button className="aspect-video rounded-lg bg-gradient-to-br from-orange-400 to-pink-500 border-2 border-transparent hover:border-gray-900 transition-all" />
-                    <button className="aspect-video rounded-lg bg-gradient-to-br from-green-400 to-teal-500 border-2 border-transparent hover:border-gray-900 transition-all" />
-                    <button className="aspect-video rounded-lg bg-gray-200 border-2 border-transparent hover:border-gray-900 transition-all flex items-center justify-center text-gray-500 text-xs">
-                      None
-                    </button>
-                  </div>
-                  <button className="w-full mt-3 p-2 border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors text-xs font-medium">
-                    Upload Custom Wallpaper
-                  </button>
+                  <select
+                    className={inputClass}
+                    value={localStorage.getItem('background-shader') || 'paper-texture'}
+                    onChange={(e) => {
+                      localStorage.setItem('background-shader', e.target.value);
+                      window.location.reload(); // Reload to apply shader
+                    }}
+                  >
+                    <option value="none">None</option>
+                    <option value="paper-texture">Paper Texture</option>
+                    <option value="mesh-gradient">Mesh Gradient</option>
+                    <option value="grain-gradient">Grain Gradient</option>
+                    <option value="dithering">Dithering</option>
+                    <option value="dot-grid">Dot Grid</option>
+                    <option value="simplex-noise">Simplex Noise</option>
+                    <option value="perlin-noise">Perlin Noise</option>
+                    <option value="waves">Waves</option>
+                    <option value="water">Water</option>
+                    <option value="smoke-ring">Smoke Ring</option>
+                    <option value="neuro-noise">Neuro Noise</option>
+                    <option value="dot-orbit">Dot Orbit</option>
+                    <option value="metaballs">Metaballs</option>
+                    <option value="voronoi">Voronoi</option>
+                    <option value="liquid-metal">Liquid Metal</option>
+                    <option value="fluted-glass">Fluted Glass</option>
+                    <option value="god-rays">God Rays</option>
+                    <option value="spiral">Spiral</option>
+                    <option value="swirl">Swirl</option>
+                    <option value="warp">Warp</option>
+                    <option value="color-panels">Color Panels</option>
+                    <option value="static-mesh-gradient">Static Mesh Gradient</option>
+                    <option value="static-radial-gradient">Static Radial Gradient</option>
+                    <option value="pulsing-border">Pulsing Border</option>
+                    <option value="halftone-dots">Halftone Dots</option>
+                    <option value="heatmap">Heatmap</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Requires page reload to apply
+                  </p>
                 </div>
               </div>
             </div>

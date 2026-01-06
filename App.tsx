@@ -18,7 +18,34 @@ import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, FolderPlus
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
-import { PaperTexture } from '@paper-design/shaders-react';
+import {
+  PaperTexture,
+  MeshGradient,
+  GrainGradient,
+  Dithering,
+  DotGrid,
+  SimplexNoise,
+  PerlinNoise,
+  Waves,
+  Water,
+  SmokeRing,
+  NeuroNoise,
+  DotOrbit,
+  Metaballs,
+  Voronoi,
+  LiquidMetal,
+  FlutedGlass,
+  GodRays,
+  Spiral,
+  Swirl,
+  Warp,
+  ColorPanels,
+  StaticMeshGradient,
+  StaticRadialGradient,
+  PulsingBorder,
+  HalftoneDots,
+  Heatmap
+} from '@paper-design/shaders-react';
 
 // Blank canvas on first load
 const ROOT_SPACE_ID = 'root';
@@ -1167,8 +1194,8 @@ const App: React.FC = () => {
       const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
 
       const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
-      let currentX = 0;
-      let currentY = 0;
+      let currentCol = 0;
+      let currentRow = 0;
       let maxRowHeight = 0;
 
       const arranged = sorted.map((item) => {
@@ -1179,29 +1206,34 @@ const App: React.FC = () => {
         const w = gridW * SLOT_SIZE - GRID_GAP;
         const h = gridH * SLOT_SIZE - GRID_GAP;
 
-        const x = currentX * SLOT_SIZE;
-        const y = currentY * SLOT_SIZE;
+        // Position at grid cell boundaries
+        const x = currentCol * SLOT_SIZE;
+        const y = currentRow * SLOT_SIZE;
 
-        currentX += gridW;
+        currentCol += gridW;
         maxRowHeight = Math.max(maxRowHeight, gridH);
 
-        if (currentX >= COLS) {
-          currentX = 0;
-          currentY += maxRowHeight;
+        if (currentCol >= COLS) {
+          currentCol = 0;
+          currentRow += maxRowHeight;
           maxRowHeight = 0;
         }
 
         return { ...item, x, y, w, h, rotation: 0 };
       });
 
-      // Center the grid
+      // Center the grid - snap offset to grid boundaries
       const minX = Math.min(...arranged.map(i => i.x));
       const maxX = Math.max(...arranged.map(i => i.x + i.w));
       const minY = Math.min(...arranged.map(i => i.y));
       const maxY = Math.max(...arranged.map(i => i.y + i.h));
 
-      const offsetX = -(minX + maxX) / 2;
-      const offsetY = -(minY + maxY) / 2;
+      const rawOffsetX = -(minX + maxX) / 2;
+      const rawOffsetY = -(minY + maxY) / 2;
+
+      // Snap offset to grid to keep items aligned
+      const offsetX = Math.round(rawOffsetX / SLOT_SIZE) * SLOT_SIZE;
+      const offsetY = Math.round(rawOffsetY / SLOT_SIZE) * SLOT_SIZE;
 
       return arranged.map(item => ({ ...item, x: item.x + offsetX, y: item.y + offsetY }));
     };
@@ -1381,17 +1413,80 @@ const App: React.FC = () => {
 
   const currentTheme = themeColors[theme] || themeColors.light;
 
+  // Shader selection
+  const selectedShader = localStorage.getItem('background-shader') || 'paper-texture';
+
+  const renderShader = () => {
+    const shaderStyle = { width: '100%', height: '100%' };
+
+    switch (selectedShader) {
+      case 'none':
+        return null;
+      case 'paper-texture':
+        return <PaperTexture grainScale={2.0} scaleX={1.0} scaleY={1.0} style={shaderStyle} />;
+      case 'mesh-gradient':
+        return <MeshGradient style={shaderStyle} />;
+      case 'grain-gradient':
+        return <GrainGradient style={shaderStyle} />;
+      case 'dithering':
+        return <Dithering style={shaderStyle} />;
+      case 'dot-grid':
+        return <DotGrid style={shaderStyle} />;
+      case 'simplex-noise':
+        return <SimplexNoise style={shaderStyle} />;
+      case 'perlin-noise':
+        return <PerlinNoise style={shaderStyle} />;
+      case 'waves':
+        return <Waves style={shaderStyle} />;
+      case 'water':
+        return <Water style={shaderStyle} />;
+      case 'smoke-ring':
+        return <SmokeRing style={shaderStyle} />;
+      case 'neuro-noise':
+        return <NeuroNoise style={shaderStyle} />;
+      case 'dot-orbit':
+        return <DotOrbit style={shaderStyle} />;
+      case 'metaballs':
+        return <Metaballs style={shaderStyle} />;
+      case 'voronoi':
+        return <Voronoi style={shaderStyle} />;
+      case 'liquid-metal':
+        return <LiquidMetal style={shaderStyle} />;
+      case 'fluted-glass':
+        return <FlutedGlass style={shaderStyle} />;
+      case 'god-rays':
+        return <GodRays style={shaderStyle} />;
+      case 'spiral':
+        return <Spiral style={shaderStyle} />;
+      case 'swirl':
+        return <Swirl style={shaderStyle} />;
+      case 'warp':
+        return <Warp style={shaderStyle} />;
+      case 'color-panels':
+        return <ColorPanels style={shaderStyle} />;
+      case 'static-mesh-gradient':
+        return <StaticMeshGradient style={shaderStyle} />;
+      case 'static-radial-gradient':
+        return <StaticRadialGradient style={shaderStyle} />;
+      case 'pulsing-border':
+        return <PulsingBorder style={shaderStyle} />;
+      case 'halftone-dots':
+        return <HalftoneDots style={shaderStyle} />;
+      case 'heatmap':
+        return <Heatmap style={shaderStyle} />;
+      default:
+        return <PaperTexture grainScale={2.0} scaleX={1.0} scaleY={1.0} style={shaderStyle} />;
+    }
+  };
+
   return (
     <div className="relative w-full h-full overflow-hidden text-gray-900" style={{ backgroundColor: currentTheme.bg }}>
-      {/* Paper Texture Shader Background */}
-      <div className="absolute inset-0 z-0 opacity-40" style={{ width: '100%', height: '100%' }}>
-        <PaperTexture
-          grainScale={2.0}
-          scaleX={1.0}
-          scaleY={1.0}
-          style={{ width: '100%', height: '100%' }}
-        />
-      </div>
+      {/* Shader Background */}
+      {selectedShader !== 'none' && (
+        <div className="absolute inset-0 z-0 opacity-40" style={{ width: '100%', height: '100%' }}>
+          {renderShader()}
+        </div>
+      )}
 
       {/* Theme Tint Overlay */}
       <div

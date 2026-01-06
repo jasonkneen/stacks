@@ -10,11 +10,12 @@ interface AIModalProps {
 
 type Mode = 'text' | 'image' | 'video' | 'audio';
 
-// Declare process to avoid TS errors in browser environment
-declare const process: {
-  env: {
-    API_KEY: string;
-  };
+// Get Gemini API key from localStorage (same as aiProvider.ts)
+const getGeminiApiKey = (): string => {
+  const stored = localStorage.getItem('gemini-api-key');
+  if (stored) return stored;
+  // Fallback to env var
+  return (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
 };
 
 export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
@@ -46,15 +47,12 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
     }
   };
 
-  const getClient = async (requiresPaid = false) => {
-    if (requiresPaid && (window as any).aistudio) {
-      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        setStatus("Waiting for API key selection...");
-        await (window as any).aistudio.openSelectKey();
-      }
+  const getClient = async () => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      throw new Error('Gemini API key not configured. Please add your API key in Settings → Providers.');
     }
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    return new GoogleGenAI({ apiKey });
   };
 
   const generate = async () => {
@@ -77,8 +75,7 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
 
       } else if (mode === 'image') {
         setStatus('Generating image...');
-        // High quality images require paid key
-        const ai = await getClient(true); 
+        const ai = await getClient(); 
         
         const response = await ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
@@ -113,7 +110,7 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
 
       } else if (mode === 'video') {
         setStatus('Initializing Veo (this may take a moment)...');
-        const ai = await getClient(true);
+        const ai = await getClient();
         
         // If image uploaded, use it for image-to-video
         let modelParams: any = {
@@ -156,7 +153,7 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (videoUri) {
              setStatus('Downloading video...');
-             const vidResponse = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+             const vidResponse = await fetch(`${videoUri}&key=${getGeminiApiKey()}`);
              const blob = await vidResponse.blob();
              const reader = new FileReader();
              reader.onloadend = () => {

@@ -169,6 +169,8 @@ export const AIChat: React.FC<Props> = ({
     imageResolution: '1024x1024',
     imageStyle: 'natural'
   });
+  // Track if user manually selected an output type (overrides auto-detection)
+  const [userOverride, setUserOverride] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Smart classification with scoring
@@ -223,12 +225,12 @@ export const AIChat: React.FC<Props> = ({
     }
   }, [prompt, isExpanded]);
 
-  // Auto-select output type based on detection (only if user hasn't manually changed it)
+  // Auto-select output type based on detection (only if user hasn't manually overridden)
   useEffect(() => {
-    if (detectedType !== 'auto' && options.outputType === 'auto') {
+    if (detectedType !== 'auto' && options.outputType === 'auto' && !userOverride) {
       setOptions(prev => ({ ...prev, outputType: detectedType }));
     }
-  }, [detectedType, options.outputType]);
+  }, [detectedType, options.outputType, userOverride]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -248,8 +250,12 @@ export const AIChat: React.FC<Props> = ({
       console.log('[AIChat] Empty prompt, not submitting');
       return;
     }
-    console.log('[AIChat] Submitting:', { prompt, options, detectedType });
-    onSubmit(prompt, { ...options, outputType: detectedType !== 'auto' ? detectedType : options.outputType });
+    // Determine effective output type: user's manual choice takes priority over auto-detection
+    const effectiveOutputType = userOverride
+      ? options.outputType
+      : (detectedType !== 'auto' ? detectedType : options.outputType);
+    console.log('[AIChat] Submitting:', { prompt, options, detectedType, userOverride, effectiveOutputType });
+    onSubmit(prompt, { ...options, outputType: effectiveOutputType });
   };
 
   const outputTypeIcons = {
@@ -337,9 +343,13 @@ export const AIChat: React.FC<Props> = ({
                     <button
                       key={type}
                       type="button"
-                      onClick={() => setOptions(o => ({ ...o, outputType: type }))}
+                      onClick={() => {
+                        setOptions(o => ({ ...o, outputType: type }));
+                        // User clicked = override auto-detection (except when clicking 'auto')
+                        setUserOverride(type !== 'auto');
+                      }}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        (detectedType !== 'auto' ? detectedType : options.outputType) === type
+                        (userOverride ? options.outputType : (detectedType !== 'auto' ? detectedType : options.outputType)) === type
                           ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
                           : 'bg-white text-gray-600 hover:bg-gray-100'
                       }`}
@@ -352,7 +362,7 @@ export const AIChat: React.FC<Props> = ({
               </div>
 
               {/* Image-specific options */}
-              {(detectedType === 'image' || options.outputType === 'image') && (
+              {((userOverride ? options.outputType : detectedType) === 'image' || options.outputType === 'image') && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-gray-500 w-16">Size:</span>
@@ -396,8 +406,8 @@ export const AIChat: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Detected prompt hint */}
-              {detectedType !== 'auto' && (
+              {/* Detected prompt hint - only show when not manually overridden */}
+              {detectedType !== 'auto' && !userOverride && (
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-blue-600">
                   {outputTypeIcons[detectedType]}
                   <span>Detected: {detectedType} generation</span>
