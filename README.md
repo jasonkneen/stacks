@@ -1,20 +1,95 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Spatial
 
-# Run and deploy your AI Studio app
+Spatial canvas workspace for notes, images, and AI-powered organization.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ZJResJ-qzdmtYgHGgpZMYwkzanNzWQPI
+- 🎨 Infinite canvas with zoom and pan
+- 📝 Notes, sticky notes, and text items
+- 🖼️ Image support with EXIF metadata
+- 🤖 AI-powered organization and analysis
+- 🔗 Connect items with visual links
+- 📊 Auto-arrange with ELK layout engine
+- 💾 Auto-save to local storage
+- 🔌 MCP server for AI integration
 
-## Run Locally
+## Installation
 
-**Prerequisites:**  Node.js
+### Run with npx (no installation)
 
+```bash
+npx spatial
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+On first run, Electron will be downloaded automatically (~100MB). Subsequent runs are instant.
+
+### Install globally
+
+```bash
+npm install -g spatial
+spatial
+```
+
+### Install from source
+
+```bash
+git clone https://github.com/jasonkneen/spatial.git
+cd spatial
+npm install
+npm run build
+npm run electron
+```
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run dev server (web only)
+npm run dev
+
+# Run Electron in dev mode
+npm run electron:dev
+
+# Build for production
+npm run build:prod
+
+# Run MCP server
+npm run mcp:dev
+```
+
+## Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+## Package Structure
+
+- `bin/` - CLI launcher script
+- `electron/` - Electron main process
+- `components/` - React components
+- `hooks/` - React hooks
+- `utils/` - Utility functions
+- `mcp/` - Model Context Protocol server
+
+## How it works
+
+When you run `npx spatial` or `spatial`:
+
+1. The launcher script (`bin/spatial.cjs`) checks if Electron is installed
+2. If not, it downloads Electron (~100MB, cached in `node_modules`)
+3. Electron starts the Vite dev server on an ephemeral port
+4. A browser window opens to the local server
+5. The app runs entirely locally - no internet required (except for AI features)
+
+## License
+
+MIT
+
+## Author
+
+Jason Kneen

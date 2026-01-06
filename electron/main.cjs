@@ -10,7 +10,8 @@ let viteProcess = null
 let serverPort = null
 
 // Find an available port
-async function findAvailablePort(startPort = 3000) {
+function findAvailablePort(startPort) {
+  if (!startPort) startPort = 3000
   return new Promise((resolve, reject) => {
     const server = net.createServer()
 
@@ -21,7 +22,7 @@ async function findAvailablePort(startPort = 3000) {
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        resolve(findAvailablePort(startPort + 1))
+        findAvailablePort(startPort + 1).then(resolve).catch(reject)
       } else {
         reject(err)
       }
@@ -30,73 +31,80 @@ async function findAvailablePort(startPort = 3000) {
 }
 
 // Wait for server to be ready
-async function waitForServer(port, maxAttempts = 30) {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      await new Promise((resolve, reject) => {
-        const socket = net.createConnection(port, 'localhost')
-        socket.on('connect', () => {
-          socket.destroy()
-          resolve()
-        })
-        socket.on('error', reject)
+function waitForServer(port, maxAttempts) {
+  if (!maxAttempts) maxAttempts = 30
+
+  function attempt(i) {
+    if (i >= maxAttempts) return Promise.resolve(false)
+
+    return new Promise((resolve, reject) => {
+      const socket = net.createConnection(port, 'localhost')
+      socket.on('connect', () => {
+        socket.destroy()
+        resolve(true)
       })
-      return true
-    } catch (err) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
+      socket.on('error', () => {
+        setTimeout(() => {
+          attempt(i + 1).then(resolve).catch(reject)
+        }, 1000)
+      })
+    })
   }
-  return false
+
+  return attempt(0)
 }
 
 // Start Vite dev server
-async function startViteServer() {
-  serverPort = await findAvailablePort(3000)
-  console.log(`Starting Vite server on port ${serverPort}...`)
+function startViteServer() {
+  return findAvailablePort(3000).then((port) => {
+    serverPort = port
+    console.log(`Starting Vite server on port ${serverPort}...`)
 
-  const appDir = path.join(__dirname, '..')
+    const appDir = path.join(__dirname, '..')
 
-  return new Promise((resolve, reject) => {
-    // Start vite server
-    viteProcess = spawn('npx', ['vite', '--port', serverPort.toString(), '--host', '0.0.0.0'], {
-      cwd: appDir,
-      stdio: 'pipe',
-      env: {
-        ...process.env,
-        FORCE_COLOR: '1'
-      }
+    return new Promise((resolve, reject) => {
+      // Start vite server
+      viteProcess = spawn('npx', ['vite', '--port', serverPort.toString(), '--host', '0.0.0.0'], {
+        cwd: appDir,
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          FORCE_COLOR: '1'
+        }
+      })
+
+      viteProcess.stdout.on('data', (data) => {
+        console.log(`[Vite] ${data}`)
+      })
+
+      viteProcess.stderr.on('data', (data) => {
+        console.error(`[Vite Error] ${data}`)
+      })
+
+      viteProcess.on('error', (error) => {
+        console.error('Failed to start Vite:', error)
+        reject(error)
+      })
+
+      viteProcess.on('exit', (code) => {
+        console.log(`Vite process exited with code ${code}`)
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          app.quit()
+        }
+      })
+
+      // Wait for server to be ready
+      setTimeout(() => {
+        waitForServer(serverPort).then((ready) => {
+          if (ready) {
+            console.log(`Vite server ready on http://localhost:${serverPort}`)
+            resolve()
+          } else {
+            reject(new Error('Vite server failed to start'))
+          }
+        }).catch(reject)
+      }, 2000)
     })
-
-    viteProcess.stdout.on('data', (data) => {
-      console.log(`[Vite] ${data}`)
-    })
-
-    viteProcess.stderr.on('data', (data) => {
-      console.error(`[Vite Error] ${data}`)
-    })
-
-    viteProcess.on('error', (error) => {
-      console.error('Failed to start Vite:', error)
-      reject(error)
-    })
-
-    viteProcess.on('exit', (code) => {
-      console.log(`Vite process exited with code ${code}`)
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        app.quit()
-      }
-    })
-
-    // Wait for server to be ready
-    setTimeout(async () => {
-      const ready = await waitForServer(serverPort)
-      if (ready) {
-        console.log(`Vite server ready on http://localhost:${serverPort}`)
-        resolve()
-      } else {
-        reject(new Error('Vite server failed to start'))
-      }
-    }, 2000)
   })
 }
 
@@ -126,14 +134,15 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(async () => {
-  try {
-    await startViteServer()
-    createWindow()
-  } catch (error) {
-    console.error('Failed to start application:', error)
-    app.quit()
-  }
+app.whenReady().then(() => {
+  startViteServer()
+    .then(() => {
+      createWindow()
+    })
+    .catch((error) => {
+      console.error('Failed to start application:', error)
+      app.quit()
+    })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -1,0 +1,87 @@
+# Development files
+.git
+.github
+.vscode
+.idea
+*.log
+*.swp
+*.swo
+*~
+
+# Build artifacts
+node_modules
+.vite
+.cache
+
+# Test files
+tests
+test
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Documentation not needed in package
+docs
+.docs
+*.md
+!README.md
+
+# Source files - ship everything Vite needs
+# (Vite compiles on-the-fly, so we need source files)
+!dist/**/*
+!electron/**/*
+!mcp/**/*
+!bin/**/*
+!components/**/*
+!hooks/**/*
+!utils/**/*
+!*.tsx
+!*.ts
+
+# Environment and config
+.env
+.env.local
+.env.*.local
+*.local
+
+# IDE
+.vscode
+.idea
+
+# Misc
+.DS_Store
+thumbs.db
+*.bak
+*.tmp
+*.temp
+
+# Build config (keep only what's needed)
+!vite.config.ts
+!tsconfig.json
+!tsconfig.mcp.json
+!package.json
+
+# Logs and crash dumps
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Agent and workspace files
+.agent
+.logs
+.claude
+
+# Metadata
+metadata.json
+ralph.yml
+PROMPT.md
+
+# Documentation
+BUG_FIX.md
+IMPLEMENTATION_SUMMARY.md
+MCP_SERVER.md
+PROVIDER_SUPPORT.md
+CLEAR_STORAGE.md

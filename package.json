@@ -1,12 +1,40 @@
 {
-  "name": "scratchpad",
-  "private": true,
-  "version": "0.0.0",
+  "name": "spatial",
+  "version": "0.1.0",
+  "description": "Spatial canvas workspace for notes, images, and AI-powered organization",
+  "author": "Jason Kneen",
+  "license": "MIT",
   "type": "module",
+  "main": "electron/main.cjs",
+  "bin": {
+    "spatial": "./bin/spatial.cjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "electron/",
+    "mcp/",
+    "components/",
+    "hooks/",
+    "utils/",
+    "types.ts",
+    "index.tsx",
+    "index.html",
+    "App.tsx",
+    "package.json",
+    "vite.config.ts",
+    "tsconfig.json",
+    "tsconfig.mcp.json",
+    "README.md"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "npm run clean && NODE_ENV=production vite build",
     "preview": "vite preview",
+    "clean": "rm -rf dist node_modules/.vite",
+    "electron": "npx electron .",
+    "electron:dev": "NODE_ENV=development npx electron .",
     "mcp:dev": "tsx watch mcp/server.ts",
     "mcp:build": "tsc -p tsconfig.mcp.json",
     "mcp:start": "node dist/mcp/server.js",
@@ -37,8 +65,21 @@
     "@types/node": "^22.14.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^39.2.4",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "web-worker": "^1.5.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasonkneen/spatial.git"
+  },
+  "keywords": [
+    "spatial",
+    "canvas",
+    "notes",
+    "ai",
+    "workspace",
+    "electron"
+  ]
 }
