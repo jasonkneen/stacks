@@ -46,17 +46,18 @@ export const ContextToolbar: React.FC<Props> = ({
   const singleFolder = selection.size === 1 && selectedItems[0]?.type === 'folder' ? selectedItems[0] : null;
   const hasPrompt = selectedItems.some(i => i.metadata?.prompt);
 
-  const btnClass = "p-2.5 rounded-2xl text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all active:scale-95 duration-150 relative";
+  const btnClass = "p-2 rounded-2xl text-gray-800 hover:text-gray-900 hover:bg-gray-800/10 transition-all active:scale-95 duration-150 relative";
 
   return (
     <div
-      className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ${
+      className={`fixed left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ${
         isVisible
           ? 'translate-y-0 opacity-100 scale-100'
           : 'translate-y-12 opacity-0 scale-95 pointer-events-none'
       }`}
+      style={{ bottom: 18 }}
     >
-      <div className="bg-white/40 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-white/60 flex items-center gap-1">
+      <div className="bg-white/40 backdrop-blur-md p-0.5 rounded-full shadow-lg border border-white/60 flex items-center gap-0.5">
 
         {/* Stack/Group (Multiple items) */}
         {selection.size > 1 && (

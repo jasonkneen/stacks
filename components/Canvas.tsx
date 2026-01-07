@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { SpatialItem, Connection, LayoutType, SortOption } from '../types';
 import { ItemRenderer } from './ItemRenderer';
+import { LAYOUT_CONSTANTS } from '../utils/layouts';
 
 interface CanvasProps {
   items: SpatialItem[];
@@ -30,171 +31,6 @@ interface CanvasProps {
   layoutType?: LayoutType; // Current layout mode - disables grid for 'random' and 'free'
   contextTip?: string; // Contextual tip to show in bottom-left
 }
-
-// Sort items by the given option
-const sortItems = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-  return [...items].sort((a, b) => {
-    switch (sortBy) {
-      case 'updated':
-        return (b.metadata?.updatedAt || 0) - (a.metadata?.updatedAt || 0);
-      case 'added':
-        return (b.metadata?.createdAt || 0) - (a.metadata?.createdAt || 0);
-      case 'name':
-        return (a.content || '').localeCompare(b.content || '');
-      case 'type':
-        return a.type.localeCompare(b.type);
-      default:
-        return 0;
-    }
-  });
-};
-
-// Grid Layout: Respects custom grid cell sizes
-const arrangeGrid = (items: SpatialItem[], sortBy: SortOption, GRID_CELL_SIZE: number = 220, GRID_GAP: number = 40): SpatialItem[] => {
-  if (items.length === 0) return items;
-
-  const sorted = sortItems(items, sortBy);
-  const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
-
-  // Build grid using item sizes
-  const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
-  let currentX = 0;
-  let currentY = 0;
-  let currentRow = 0;
-  let maxRowHeight = 0;
-
-  const arranged = sorted.map((item) => {
-    // Use stored grid dimensions or default to 1x1
-    const gridW = item.metadata?.gridCellsX || 1;
-    const gridH = item.metadata?.gridCellsY || 1;
-
-    const w = gridW * SLOT_SIZE - GRID_GAP;
-    const h = gridH * SLOT_SIZE - GRID_GAP;
-
-    // Simple flow layout
-    const x = currentX * SLOT_SIZE;
-    const y = currentY * SLOT_SIZE;
-
-    // Update position for next item
-    currentX += gridW;
-    maxRowHeight = Math.max(maxRowHeight, gridH);
-
-    // Wrap to next row if needed
-    if (currentX >= COLS) {
-      currentX = 0;
-      currentY += maxRowHeight;
-      maxRowHeight = 0;
-    }
-
-    return {
-      ...item,
-      x,
-      y,
-      w,
-      h,
-      rotation: 0,
-    };
-  });
-
-  // Center the grid
-  const minX = Math.min(...arranged.map(i => i.x));
-  const maxX = Math.max(...arranged.map(i => i.x + i.w));
-  const minY = Math.min(...arranged.map(i => i.y));
-  const maxY = Math.max(...arranged.map(i => i.y + i.h));
-
-  const offsetX = -(minX + maxX) / 2;
-  const offsetY = -(minY + maxY) / 2;
-
-  return arranged.map(item => ({
-    ...item,
-    x: item.x + offsetX,
-    y: item.y + offsetY
-  }));
-};
-
-// Bento Layout: Masonry-style with varied sizes (wider preferred)
-const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-  if (items.length === 0) return items;
-
-  const sorted = sortItems(items, sortBy);
-
-  const GAP = 20;
-  const SMALL = 180;
-  const LARGE_W = 400; // Wider
-  const LARGE_H = 280; // Less tall - landscape preference
-  const COLS = 3;
-
-  // Track column heights for masonry layout
-  const colHeights = new Array(COLS).fill(0);
-
-  const arranged = sorted.map((item, index) => {
-    // Use stored grid dimensions or vary sizes
-    const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
-    const isLarge = hasCustomSize || index % 4 === 0;
-
-    const w = isLarge ? LARGE_W : SMALL;
-    const h = isLarge ? LARGE_H : SMALL;
-
-    // Find shortest column
-    const minHeight = Math.min(...colHeights);
-    const col = colHeights.indexOf(minHeight);
-
-    // Position in that column
-    const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
-    const y = colHeights[col];
-
-    // Update column height
-    colHeights[col] += h + GAP;
-
-    return {
-      ...item,
-      x,
-      y,
-      w,
-      h,
-      rotation: 0,
-    };
-  });
-
-  // Center vertically
-  const maxHeight = Math.max(...colHeights);
-  return arranged.map(item => ({
-    ...item,
-    y: item.y - maxHeight / 2,
-  }));
-};
-
-// Random Layout: Scattered with slight rotation for natural feel
-const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-  if (items.length === 0) return items;
-
-  const sorted = sortItems(items, sortBy);
-
-  const SPREAD = 400;
-  const SIZE_MIN = 160;
-  const SIZE_MAX = 280;
-
-  // Use seeded random for reproducibility based on item count
-  let seed = items.length;
-  const seededRandom = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-
-  return sorted.map((item) => {
-    const angle = seededRandom() * Math.PI * 2;
-    const distance = seededRandom() * SPREAD;
-
-    return {
-      ...item,
-      x: Math.cos(angle) * distance,
-      y: Math.sin(angle) * distance,
-      w: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-      h: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-      rotation: (seededRandom() - 0.5) * 10, // -5 to +5 degrees
-    };
-  });
-};
 
 export const Canvas: React.FC<CanvasProps> = ({
   items,
@@ -249,10 +85,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [cameraOverride]);
 
-  // Grid Settings
-  const GRID_CELL_SIZE = 220;
-  const GRID_GAP = 40;
-  const GRID_SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
+  const { GRID_CELL_SIZE, GRID_GAP, GRID_SLOT_SIZE } = LAYOUT_CONSTANTS;
 
   // Interaction State
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -262,7 +95,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [resizingId, setResizingId] = useState<string | null>(null);
   const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number; rotation: number; itemX: number; itemY: number } | null>(null);
   const resizeDimensionsRef = useRef<{ w: number; h: number; gridCellsX: number; gridCellsY: number; rotation: number } | null>(null);
-  const [resizeTrigger, setResizeTrigger] = useState(0);
+  const resizeRafRef = useRef<number>(0);
   
   // Panning & Selection Modes
   const [isPanning, setIsPanning] = useState(false);
@@ -614,14 +447,20 @@ export const Canvas: React.FC<CanvasProps> = ({
         // Clamp rotation to reasonable range
         const newRotation = Math.max(-15, Math.min(15, angleDeg * 0.3));
 
-        // Store dimensions + rotation locally, don't trigger parent update during resize
+        // Store in ref
         resizeDimensionsRef.current = { w: newW, h: newH, gridCellsX, gridCellsY, rotation: newRotation };
 
-        // Throttle visual updates with RAF to prevent jank
-        if (!animationFrameRef.current) {
-          animationFrameRef.current = requestAnimationFrame(() => {
-            setResizeTrigger(prev => prev + 1);
-            animationFrameRef.current = 0;
+        // Direct DOM manipulation for 60fps visual feedback (no React re-render)
+        if (!resizeRafRef.current) {
+          resizeRafRef.current = requestAnimationFrame(() => {
+            const el = document.querySelector(`[data-item-id="${resizingId}"]`) as HTMLElement;
+            if (el && resizeDimensionsRef.current) {
+              el.style.width = `${resizeDimensionsRef.current.w}px`;
+              el.style.height = `${resizeDimensionsRef.current.h}px`;
+              const existingTransform = el.style.transform.replace(/rotate\([^)]+\)/, '').trim();
+              el.style.transform = `${existingTransform} rotate(${resizeDimensionsRef.current.rotation}deg)`;
+            }
+            resizeRafRef.current = 0;
           });
         }
 
@@ -710,6 +549,12 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [isPanning, draggingId, resizingId, selectionBox, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
+    // Cancel any pending resize RAF
+    if (resizeRafRef.current) {
+      cancelAnimationFrame(resizeRafRef.current);
+      resizeRafRef.current = 0;
+    }
+
     // Clear resize state and persist final dimensions + rotation
     if (resizingId && resizeDimensionsRef.current) {
         const { w, h, gridCellsX, gridCellsY, rotation } = resizeDimensionsRef.current;

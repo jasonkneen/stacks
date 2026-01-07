@@ -144,6 +144,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   return (
     <div
       ref={containerRef}
+      data-item-id={item.id}
       className={`${commonClasses} rounded-3xl select-none`}
       style={{...style, background: 'transparent', overflow: 'visible'}}
       onMouseDown={onMouseDown}

@@ -7,6 +7,7 @@ export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = tr
   const previousSpacesRef = useRef<string>('');
   const renderCountRef = useRef(0);
   const spacesRef = useRef(spaces);
+  const lastSaveRef = useRef<number>(0);
 
   // Always keep ref up-to-date with latest spaces
   useEffect(() => {
@@ -17,6 +18,14 @@ export const useAutoSave = (spaces: Record<string, Space>, enabled: boolean = tr
     if (!enabled) return;
 
     renderCountRef.current++;
+
+    // Throttle expensive JSON.stringify calls to max once per 100ms
+    const now = Date.now();
+    if (now - lastSaveRef.current < 100) {
+      return;
+    }
+    lastSaveRef.current = now;
+
     const currentSpaces = JSON.stringify(spaces);
 
     // Only save if data has ACTUALLY changed

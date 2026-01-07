@@ -15,6 +15,7 @@ import { SearchModal } from './components/SearchModal';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
 import { loadSpaces, saveSpaces } from './utils/storage';
+import { getFitToViewParams, getLayoutFunction } from './utils/layouts';
 import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search } from 'lucide-react';
 import ELK from 'elkjs';
@@ -65,61 +66,14 @@ const INITIAL_SPACES: Record<string, Space> = {
 
 const elk = new ELK();
 
-// Utility to calculate best-fit view
-const getFitToViewParams = (items: SpatialItem[]) => {
-    if (items.length === 0) return { x: 0, y: 0, zoom: 1 };
-
-    const padding = 100;
-    const minX = Math.min(...items.map(i => i.x));
-    const maxX = Math.max(...items.map(i => i.x + i.w));
-    const minY = Math.min(...items.map(i => i.y));
-    const maxY = Math.max(...items.map(i => i.y + i.h));
-
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const centerX = minX + width / 2;
-    const centerY = minY + height / 2;
-
-    const screenW = window.innerWidth;
-    const screenH = window.innerHeight;
-
-    // Determine scale to fit
-    const scaleX = (screenW - padding * 2) / width;
-    const scaleY = (screenH - padding * 2) / height;
-    
-    // Clamp zoom to reasonable levels
-    const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 1.5);
-
-    // Calculate camera offset
-    return {
-        x: -centerX * zoom,
-        y: -centerY * zoom,
-        zoom
-    };
-};
-
 const App: React.FC = () => {
   // Load from localStorage or use initial data
   const [spaces, setSpacesRaw] = useState<Record<string, Space>>(INITIAL_SPACES);
   const [isLoadingSpaces, setIsLoadingSpaces] = useState(true);
 
-  // Wrap setSpaces to log all state changes and track item counts
-  const setSpaces = useCallback((update: any) => {
+  const setSpaces = useCallback((update: Record<string, Space> | ((prev: Record<string, Space>) => Record<string, Space>)) => {
     setSpacesRaw(prev => {
       const newState = typeof update === 'function' ? update(prev) : update;
-      const prevCount = Object.values(prev).reduce((sum, s) => sum + s.items.length, 0);
-      const newCount = Object.values(newState).reduce((sum, s) => sum + s.items.length, 0);
-
-      if (prevCount !== newCount) {
-        const stack = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
-        console.log('[App] setSpaces - item count changed:', {
-          from: prevCount,
-          to: newCount,
-          diff: newCount - prevCount,
-          caller: stack.substring(stack.lastIndexOf('/') + 1, stack.indexOf(')'))
-        });
-      }
-
       return newState;
     });
   }, []);
@@ -159,7 +113,6 @@ const App: React.FC = () => {
                       content = `<h1>${title}</h1>\n\n${content}`;
                     }
 
-                    console.log('[App] Fixing item with NOTE markup:', item.id, 'from', item.type, 'to note');
                     return {
                       ...item,
                       type: 'note' as const,
@@ -175,10 +128,7 @@ const App: React.FC = () => {
               }
             ])
           );
-          console.log('[App] Setting initial spaces from saved data');
           setSpaces(fixed);
-        } else {
-          console.log('[App] No saved data, using INITIAL_SPACES');
         }
       } catch (error) {
         console.error('[App] Failed to load spaces:', error);
@@ -278,9 +228,6 @@ const App: React.FC = () => {
   const analyzeAndUpdateImage = useCallback(async (itemId: string, imageUrl: string, spaceId?: string) => {
     const targetSpaceId = spaceId || activeSpaceId;
 
-    console.log('[App] Starting image analysis for:', itemId);
-
-    // Mark as analyzing
     setSpaces(prev => ({
       ...prev,
       [targetSpaceId]: {
@@ -1271,214 +1218,11 @@ const App: React.FC = () => {
   }, [activeSpaceId]);
 
 
-  // Auto Arrange Logic
   const handleAutoArrange = useCallback((layoutType: LayoutType, sortBy: SortOption, selectedIds: Set<string>) => {
     if (activeSpace.items.length === 0) return;
 
-    // Import arrangement functions from Canvas
-    const sortItems = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-      return [...items].sort((a, b) => {
-        switch (sortBy) {
-          case 'updated':
-            return (b.metadata?.updatedAt || 0) - (a.metadata?.updatedAt || 0);
-          case 'added':
-            return (b.metadata?.createdAt || 0) - (a.metadata?.createdAt || 0);
-          case 'name':
-            return (a.content || '').localeCompare(b.content || '');
-          case 'type':
-            return a.type.localeCompare(b.type);
-          default:
-            return 0;
-        }
-      });
-    };
+    const layout = getLayoutFunction(layoutType);
 
-    // Measure note content and calculate optimal grid size
-    const measureNoteContent = (item: SpatialItem): { gridCellsX: number; gridCellsY: number } => {
-      if (item.type !== 'note') {
-        return {
-          gridCellsX: item.metadata?.gridCellsX || 1,
-          gridCellsY: item.metadata?.gridCellsY || 1
-        };
-      }
-
-      // Create temporary element to measure content
-      const temp = document.createElement('div');
-      try {
-        temp.style.position = 'absolute';
-        temp.style.visibility = 'hidden';
-        temp.style.width = '600px'; // Max width for measurement
-        temp.style.padding = '16px';
-        temp.style.fontSize = '16px';
-        temp.style.lineHeight = '1.6';
-        temp.innerHTML = item.content;
-        document.body.appendChild(temp);
-
-        const contentHeight = temp.scrollHeight;
-
-        // Convert to grid cells (220px per cell + 40px gap)
-        const GRID_CELL_SIZE = 220;
-        const GRID_GAP = 40;
-        const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
-
-        // Calculate cells needed (min 1, max 10 width, max 8 height)
-        const gridCellsX = Math.min(10, Math.max(1, Math.ceil((600 + GRID_GAP) / SLOT_SIZE)));
-        const gridCellsY = Math.min(8, Math.max(1, Math.ceil((contentHeight + GRID_GAP) / SLOT_SIZE)));
-
-        return { gridCellsX, gridCellsY };
-      } finally {
-        // Ensure cleanup even if error occurs
-        if (temp.parentNode) {
-          document.body.removeChild(temp);
-        }
-      }
-    };
-
-    const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-      if (items.length === 0) return items;
-      const sorted = sortItems(items, sortBy);
-      const GRID_GAP = 40;
-      const GRID_CELL_SIZE = 220;
-      const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
-
-      const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
-      let currentCol = 0;
-      let currentRow = 0;
-      let maxRowHeight = 0;
-
-      const arranged = sorted.map((item) => {
-        // Measure content for notes, use stored dimensions for others
-        const { gridCellsX: gridW, gridCellsY: gridH } = measureNoteContent(item);
-
-        const w = gridW * SLOT_SIZE - GRID_GAP;
-        const h = gridH * SLOT_SIZE - GRID_GAP;
-
-        // Position at grid cell boundaries
-        const x = currentCol * SLOT_SIZE;
-        const y = currentRow * SLOT_SIZE;
-
-        currentCol += gridW;
-        maxRowHeight = Math.max(maxRowHeight, gridH);
-
-        if (currentCol >= COLS) {
-          currentCol = 0;
-          currentRow += maxRowHeight;
-          maxRowHeight = 0;
-        }
-
-        return {
-          ...item,
-          x,
-          y,
-          w,
-          h,
-          rotation: 0,
-          metadata: {
-            ...item.metadata,
-            gridCellsX: gridW,
-            gridCellsY: gridH
-          }
-        };
-      });
-
-      // Center the grid - snap offset to grid boundaries
-      const minX = Math.min(...arranged.map(i => i.x));
-      const maxX = Math.max(...arranged.map(i => i.x + i.w));
-      const minY = Math.min(...arranged.map(i => i.y));
-      const maxY = Math.max(...arranged.map(i => i.y + i.h));
-
-      const rawOffsetX = -(minX + maxX) / 2;
-      const rawOffsetY = -(minY + maxY) / 2;
-
-      // Snap offset to grid to keep items aligned
-      const offsetX = Math.round(rawOffsetX / SLOT_SIZE) * SLOT_SIZE;
-      const offsetY = Math.round(rawOffsetY / SLOT_SIZE) * SLOT_SIZE;
-
-      return arranged.map(item => ({ ...item, x: item.x + offsetX, y: item.y + offsetY }));
-    };
-
-    const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-      if (items.length === 0) return items;
-      const sorted = sortItems(items, sortBy);
-      const GAP = 20;
-      const SMALL = 180;
-      const LARGE_W = 400;
-      const LARGE_H = 280;
-      const COLS = 3;
-      const colHeights = new Array(COLS).fill(0);
-      const arranged = sorted.map((item, index) => {
-        // Measure content for notes
-        const { gridCellsX, gridCellsY } = measureNoteContent(item);
-        const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
-        const isLarge = hasCustomSize || index % 4 === 0;
-
-        const w = isLarge ? LARGE_W : SMALL;
-        const h = isLarge ? LARGE_H : SMALL;
-
-        const minHeight = Math.min(...colHeights);
-        const col = colHeights.indexOf(minHeight);
-        const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
-        const y = colHeights[col];
-        colHeights[col] += h + GAP;
-        return {
-          ...item,
-          x,
-          y,
-          w,
-          h,
-          rotation: 0,
-          metadata: {
-            ...item.metadata,
-            gridCellsX,
-            gridCellsY
-          }
-        };
-      });
-      const maxHeight = Math.max(...colHeights);
-      return arranged.map(item => ({ ...item, y: item.y - maxHeight / 2 }));
-    };
-
-    const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
-      if (items.length === 0) return items;
-      const sorted = sortItems(items, sortBy);
-      const SPREAD = 400;
-      const SIZE_MIN = 160;
-      const SIZE_MAX = 280;
-      let seed = items.length;
-      const seededRandom = () => {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
-      };
-      return sorted.map((item) => {
-        // Measure content for notes to get proper dimensions
-        const { gridCellsX, gridCellsY } = measureNoteContent(item);
-        const GRID_CELL_SIZE = 220;
-        const GRID_GAP = 40;
-        const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
-
-        const angle = seededRandom() * Math.PI * 2;
-        const distance = seededRandom() * SPREAD;
-        return {
-          ...item,
-          x: Math.cos(angle) * distance,
-          y: Math.sin(angle) * distance,
-          w: item.type === 'note' ? gridCellsX * SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-          h: item.type === 'note' ? gridCellsY * SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-          rotation: (seededRandom() - 0.5) * 10,
-          metadata: {
-            ...item.metadata,
-            gridCellsX,
-            gridCellsY
-          }
-        };
-      });
-    };
-
-    // Apply layout based on type
-    const layout = layoutType === 'grid' ? arrangeGrid :
-                   layoutType === 'bento' ? arrangeBento : arrangeRandom;
-
-    // Determine which items to arrange
     const itemsToArrange = selectedIds.size > 0
       ? activeSpace.items.filter(item => selectedIds.has(item.id))
       : activeSpace.items;
@@ -1487,16 +1231,11 @@ const App: React.FC = () => {
       ? activeSpace.items.filter(item => !selectedIds.has(item.id))
       : [];
 
-    // Arrange selected/all items
     const arranged = layout(itemsToArrange, sortBy);
-
-    // Combine arranged items with others
     const newItems = [...arranged, ...otherItems];
 
-    // Update items
     updateItems(newItems);
 
-    // Update space preferences
     setSpaces(prev => ({
       ...prev,
       [activeSpaceId]: {
@@ -1506,12 +1245,10 @@ const App: React.FC = () => {
       }
     }));
 
-    // Fit camera to arranged bounds
     const fitParams = getFitToViewParams(arranged);
     setCameraOverride({ ...fitParams, id: Date.now().toString() });
   }, [activeSpace.items, activeSpaceId, updateItems]);
 
-  // Navigation Logic
   const handleNavigate = (targetSpaceId: string) => {
     if (spaces[targetSpaceId]) {
       setActiveSpaceId(targetSpaceId);

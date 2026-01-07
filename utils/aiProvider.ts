@@ -40,13 +40,6 @@ const getApiKey = (provider: AIProvider): string => {
   const keyName = keyMap[provider];
   const stored = localStorage.getItem(keyName);
 
-  console.log(`[aiProvider] Getting API key for ${provider}:`, {
-    keyName,
-    hasKey: !!stored,
-    keyLength: stored?.length || 0,
-    keyPreview: stored ? `${stored.substring(0, 10)}...` : 'none'
-  });
-
   if (stored) return stored;
 
   // Fallback to environment variables
@@ -62,14 +55,6 @@ const getApiKey = (provider: AIProvider): string => {
 // Get language model instance
 export const getLanguageModel = (config: ProviderConfig): LanguageModel => {
   const apiKey = config.apiKey || getApiKey(config.provider);
-
-  console.log(`[aiProvider] getLanguageModel called:`, {
-    provider: config.provider,
-    model: config.model,
-    hasApiKey: !!apiKey,
-    apiKeyLength: apiKey?.length || 0,
-    configApiKey: !!config.apiKey
-  });
 
   if (!apiKey) {
     throw new Error(`${config.provider} API key not configured. Please add your API key in Settings → Providers.`);

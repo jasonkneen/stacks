@@ -30,11 +30,16 @@ export interface SpatialItem {
     isAnalyzing?: boolean;
     isGenerating?: boolean;
     title?: string;
-    createdAt?: number;   // Timestamp for sorting by added
-    updatedAt?: number;   // Timestamp for sorting by updated
+    createdAt?: number;
+    updatedAt?: number;
     usedTools?: boolean;
-    gridCellsX?: number;  // Grid cells occupied horizontally
-    gridCellsY?: number;  // Grid cells occupied vertically
+    gridCellsX?: number;
+    gridCellsY?: number;
+    prompt?: string;
+    imageResolution?: string;
+    isVariant?: boolean;
+    imageStyle?: string;
+    originalId?: string;
   };
   linkedSpaceId?: string; // For folders
 }
