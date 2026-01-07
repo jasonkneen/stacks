@@ -5,11 +5,13 @@ import { useMCPClient } from '../hooks/useMCPClient';
 interface Props {
   onClose: () => void;
   onThemeChange?: (theme: string) => void;
+  onShaderChange?: (shader: string) => void;
+  onShaderPerformanceChange?: (performance: string) => void;
 }
 
 type SettingsTab = 'general' | 'providers' | 'models' | 'display' | 'mcp';
 
-export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
+export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange, onShaderChange, onShaderPerformanceChange }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [autoSave, setAutoSave] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
@@ -39,9 +41,9 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
   };
 
   const sectionClass = "space-y-4";
-  const labelClass = "text-sm font-medium text-gray-700 flex items-center gap-2";
+  const labelClass = "text-sm font-medium text-gray-900 flex items-center gap-2";
   const toggleClass = "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2";
-  const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
+  const inputClass = "w-full px-3 py-2 bg-white/60 border border-white/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900";
 
   const Toggle: React.FC<{ enabled: boolean; onChange: (v: boolean) => void }> = ({ enabled, onChange }) => (
     <button
@@ -70,13 +72,13 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 max-h-[85vh] flex"
+        className="bg-white/40 backdrop-blur-md border border-white/60 rounded-3xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 max-h-[85vh] flex"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Side Tabs */}
-        <div className="w-48 bg-gray-50 border-r border-gray-200 p-4 flex flex-col">
+        <div className="w-48 bg-white/30 border-r border-white/40 p-4 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-4 mb-4">
-            <Settings size={20} className="text-gray-700" />
+            <Settings size={20} className="text-gray-900" />
             <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
           </div>
 
@@ -88,7 +90,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                 className={`w-full px-3 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded-xl text-left ${
                   activeTab === tab.id
                     ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:bg-white/50 hover:text-gray-900'
+                    : 'text-gray-800 hover:bg-white/50 hover:text-gray-900'
                 }`}
               >
                 {tab.icon}
@@ -100,15 +102,15 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
 
         {/* Content */}
         <div className="flex-1 flex flex-col">
-          <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div className="px-6 py-5 border-b border-white/40 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
               {tabs.find(t => t.id === activeTab)?.label}
             </h3>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 hover:bg-white/50 rounded-full transition-colors"
             >
-              <X size={20} className="text-gray-500" />
+              <X size={20} className="text-gray-800" />
             </button>
           </div>
 
@@ -368,49 +370,88 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-100">
-                  <label className="block text-xs font-medium text-gray-700 mb-3">
-                    Background Shader
-                  </label>
-                  <select
-                    className={inputClass}
-                    value={localStorage.getItem('background-shader') || 'neuro-noise'}
-                    onChange={(e) => {
-                      localStorage.setItem('background-shader', e.target.value);
-                      window.location.reload(); // Reload to apply shader
-                    }}
-                  >
-                    <option value="none">None</option>
-                    <option value="paper-texture">Paper Texture</option>
-                    <option value="mesh-gradient">Mesh Gradient</option>
-                    <option value="grain-gradient">Grain Gradient</option>
-                    <option value="dithering">Dithering</option>
-                    <option value="dot-grid">Dot Grid</option>
-                    <option value="simplex-noise">Simplex Noise</option>
-                    <option value="perlin-noise">Perlin Noise</option>
-                    <option value="waves">Waves</option>
-                    <option value="water">Water</option>
-                    <option value="smoke-ring">Smoke Ring</option>
-                    <option value="neuro-noise">Neuro Noise</option>
-                    <option value="dot-orbit">Dot Orbit</option>
-                    <option value="metaballs">Metaballs</option>
-                    <option value="voronoi">Voronoi</option>
-                    <option value="liquid-metal">Liquid Metal</option>
-                    <option value="fluted-glass">Fluted Glass</option>
-                    <option value="god-rays">God Rays</option>
-                    <option value="spiral">Spiral</option>
-                    <option value="swirl">Swirl</option>
-                    <option value="warp">Warp</option>
-                    <option value="color-panels">Color Panels</option>
-                    <option value="static-mesh-gradient">Static Mesh Gradient</option>
-                    <option value="static-radial-gradient">Static Radial Gradient</option>
-                    <option value="pulsing-border">Pulsing Border</option>
-                    <option value="halftone-dots">Halftone Dots</option>
-                    <option value="heatmap">Heatmap</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Requires page reload to apply
-                  </p>
+                <div className="pt-4 border-t border-gray-100 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-3">
+                      Background Shader
+                    </label>
+                    <select
+                      className={inputClass}
+                      value={localStorage.getItem('background-shader') || 'neuro-noise'}
+                      onChange={(e) => {
+                        localStorage.setItem('background-shader', e.target.value);
+                        onShaderChange?.(e.target.value);
+                      }}
+                    >
+                      <option value="none">None</option>
+                      <optgroup label="Static (Battery Friendly)">
+                        <option value="paper-texture">Paper Texture</option>
+                        <option value="static-mesh-gradient">Static Mesh Gradient</option>
+                        <option value="static-radial-gradient">Static Radial Gradient</option>
+                      </optgroup>
+                      <optgroup label="Subtle Animation">
+                        <option value="grain-gradient">Grain Gradient</option>
+                        <option value="dithering">Dithering</option>
+                        <option value="dot-grid">Dot Grid</option>
+                        <option value="simplex-noise">Simplex Noise</option>
+                        <option value="perlin-noise">Perlin Noise</option>
+                      </optgroup>
+                      <optgroup label="Dynamic (Higher GPU)">
+                        <option value="neuro-noise">Neuro Noise</option>
+                        <option value="waves">Waves</option>
+                        <option value="water">Water</option>
+                        <option value="smoke-ring">Smoke Ring</option>
+                        <option value="dot-orbit">Dot Orbit</option>
+                        <option value="metaballs">Metaballs</option>
+                        <option value="voronoi">Voronoi</option>
+                        <option value="liquid-metal">Liquid Metal</option>
+                        <option value="mesh-gradient">Mesh Gradient</option>
+                        <option value="fluted-glass">Fluted Glass</option>
+                        <option value="god-rays">God Rays</option>
+                        <option value="spiral">Spiral</option>
+                        <option value="swirl">Swirl</option>
+                        <option value="warp">Warp</option>
+                        <option value="color-panels">Color Panels</option>
+                        <option value="pulsing-border">Pulsing Border</option>
+                        <option value="halftone-dots">Halftone Dots</option>
+                        <option value="heatmap">Heatmap</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {localStorage.getItem('background-shader') !== 'none' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-3">
+                        Performance
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'battery', name: 'Battery Saver', desc: 'Low res, paused when hidden' },
+                          { id: 'balanced', name: 'Balanced', desc: 'Medium res, smooth' },
+                          { id: 'quality', name: 'Quality', desc: 'Full res, always on' },
+                        ].map((preset) => {
+                          const currentPreset = localStorage.getItem('shader-performance') || 'balanced';
+                          return (
+                            <button
+                              key={preset.id}
+                              onClick={() => {
+                                localStorage.setItem('shader-performance', preset.id);
+                                onShaderPerformanceChange?.(preset.id);
+                              }}
+                              className={`p-2.5 rounded-xl border-2 transition-all text-left ${
+                                currentPreset === preset.id 
+                                  ? 'border-gray-900 ring-2 ring-gray-900/20 bg-gray-50' 
+                                  : 'border-gray-200 hover:border-gray-300 bg-white'
+                              }`}
+                            >
+                              <span className="block text-xs font-medium text-gray-900">{preset.name}</span>
+                              <span className="block text-[10px] text-gray-500 mt-0.5 leading-tight">{preset.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

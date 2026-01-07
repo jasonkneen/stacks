@@ -11,9 +11,8 @@ const APP_DIR = path.join(__dirname, '..')
 const CACHE_DIR = path.join(os.homedir(), '.stacks')
 const ELECTRON_CACHE = path.join(CACHE_DIR, 'electron')
 const UPDATE_CHECK_FILE = path.join(CACHE_DIR, 'last-update-check')
+const PID_FILE = path.join(CACHE_DIR, 'stacks.pid')
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000
-
-let proxyProcess = null
 
 function ensureCacheDir() {
   if (!fs.existsSync(CACHE_DIR)) {
@@ -196,50 +195,51 @@ function checkBuilt() {
   }
 }
 
-function startProxy() {
-  const proxyPath = path.join(APP_DIR, 'dist', 'mcp', 'proxy.js')
-
-  if (!fs.existsSync(proxyPath)) {
-    console.log('⚠ MCP proxy not found, skipping...')
-    return null
-  }
-
-  console.log('☐ Starting MCP proxy...')
-
-  const node = getNodeCommand()
-  proxyProcess = spawn(node, [proxyPath], {
-    cwd: APP_DIR,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      NODE_ENV: 'production'
-    },
-    detached: false
-  })
-
-  proxyProcess.stdout.on('data', () => {
-    // Proxy logs go to stderr by design, stdout is for JSON-RPC
-  })
-
-  proxyProcess.stderr.on('data', (data) => {
-    const msg = data.toString().trim()
-    if (msg.includes('ready')) {
-      console.log('✓ MCP proxy ready')
-    }
-  })
-
-  proxyProcess.on('error', (err) => {
-    console.error('⚠ Proxy error:', err.message)
-  })
-
-  return proxyProcess
+function writePidFile(pid) {
+  try {
+    ensureCacheDir()
+    fs.writeFileSync(PID_FILE, pid.toString())
+  } catch {}
 }
 
-function stopProxy() {
-  if (proxyProcess) {
-    proxyProcess.kill()
-    proxyProcess = null
+function readPidFile() {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      return parseInt(fs.readFileSync(PID_FILE, 'utf8'), 10)
+    }
+  } catch {}
+  return null
+}
+
+function clearPidFile() {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      fs.unlinkSync(PID_FILE)
+    }
+  } catch {}
+}
+
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
   }
+}
+
+function stopRunningInstance() {
+  const pid = readPidFile()
+  if (pid && isProcessRunning(pid)) {
+    console.log(`Stopping existing instance (PID: ${pid})...`)
+    try {
+      process.kill(pid, 'SIGTERM')
+      clearPidFile()
+      return true
+    } catch {}
+  }
+  clearPidFile()
+  return false
 }
 
 async function launch() {

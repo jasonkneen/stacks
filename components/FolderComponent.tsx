@@ -63,11 +63,11 @@ export const FolderComponent: React.FC<Props> = memo(({ item, onDoubleClick, onE
     >
         {/* Empty State */}
         {isEmpty && (
-            <div className="w-full h-full bg-blue-50/50 backdrop-blur-xl border border-blue-100/50 rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-blue-100/60 transition-colors shadow-sm">
-                <div className="p-4 bg-white rounded-full shadow-sm text-blue-500">
+            <div className="w-full h-full bg-gray-100/50 backdrop-blur-xl border border-gray-200/50 rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-gray-200/60 transition-colors shadow-sm">
+                <div className="p-4 bg-white rounded-full shadow-sm text-gray-500">
                     <FolderIcon size={32} strokeWidth={2} />
                 </div>
-                <span className="text-sm font-semibold text-blue-900/70 px-4 text-center truncate w-full">
+                <span className="text-sm font-semibold text-gray-700 px-4 text-center truncate w-full">
                     {item.content}
                 </span>
             </div>

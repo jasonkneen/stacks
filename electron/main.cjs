@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, nativeImage } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const net = require('net')
@@ -6,6 +6,9 @@ const fs = require('fs')
 
 // Set app name for macOS menu
 app.name = 'Stacks'
+if (process.platform === 'darwin') {
+  app.setName('Stacks')
+}
 
 const isDev = process.env.NODE_ENV === 'development'
 

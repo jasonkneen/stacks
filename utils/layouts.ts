@@ -1,4 +1,19 @@
-import { SpatialItem, SortOption, LayoutType } from '../types';
+import { SpatialItem, SortOption, LayoutType, FlowDirection, ItemSpacing } from '../types';
+
+export interface LayoutOptions {
+  sortBy: SortOption;
+  flowDirection?: FlowDirection;
+  itemSpacing?: ItemSpacing;
+}
+
+const getSpacingMultiplier = (spacing: ItemSpacing = 'comfortable'): number => {
+  switch (spacing) {
+    case 'compact': return 0.3;
+    case 'comfortable': return 1;
+    case 'spacious': return 2.5;
+    default: return 1;
+  }
+};
 
 // Grid and layout constants
 export const LAYOUT_CONSTANTS = {
@@ -71,114 +86,160 @@ export const measureNoteContent = (item: SpatialItem): { gridCellsX: number; gri
   }
 };
 
-// Grid Layout: Respects custom grid cell sizes
-export const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+export const arrangeGrid = (items: SpatialItem[], options: LayoutOptions): SpatialItem[] => {
   if (items.length === 0) return items;
 
+  const { sortBy, flowDirection = 'horizontal', itemSpacing = 'comfortable' } = options;
   const sorted = sortItems(items, sortBy);
-  const { GRID_CELL_SIZE, GRID_GAP, GRID_SLOT_SIZE } = LAYOUT_CONSTANTS;
+  const spacingMult = getSpacingMultiplier(itemSpacing);
+  const { GRID_CELL_SIZE, GRID_GAP } = LAYOUT_CONSTANTS;
+  const adjustedGap = Math.round(GRID_GAP * spacingMult);
+  const slotSize = GRID_CELL_SIZE + adjustedGap;
 
-  const COLS = Math.ceil(Math.sqrt(items.length * 1.5));
+  const isHorizontal = flowDirection === 'horizontal';
+  const TRACK_LIMIT = isHorizontal ? Math.ceil(Math.sqrt(items.length * 1.5)) : Math.ceil(Math.sqrt(items.length * 2.5));
   let currentCol = 0;
   let currentRow = 0;
-  let maxRowHeight = 0;
+  let maxTrackSize = 0;
 
   const arranged = sorted.map((item) => {
     const { gridCellsX: gridW, gridCellsY: gridH } = measureNoteContent(item);
 
-    const w = gridW * GRID_SLOT_SIZE - GRID_GAP;
-    const h = gridH * GRID_SLOT_SIZE - GRID_GAP;
+    const w = gridW * slotSize - adjustedGap;
+    const h = gridH * slotSize - adjustedGap;
 
-    const x = currentCol * GRID_SLOT_SIZE;
-    const y = currentRow * GRID_SLOT_SIZE;
+    const x = currentCol * slotSize;
+    const y = currentRow * slotSize;
 
-    currentCol += gridW;
-    maxRowHeight = Math.max(maxRowHeight, gridH);
-
-    if (currentCol >= COLS) {
-      currentCol = 0;
-      currentRow += maxRowHeight;
-      maxRowHeight = 0;
+    if (isHorizontal) {
+      currentCol += gridW;
+      maxTrackSize = Math.max(maxTrackSize, gridH);
+      if (currentCol >= TRACK_LIMIT) {
+        currentCol = 0;
+        currentRow += maxTrackSize;
+        maxTrackSize = 0;
+      }
+    } else {
+      currentRow += gridH;
+      maxTrackSize = Math.max(maxTrackSize, gridW);
+      if (currentRow >= TRACK_LIMIT) {
+        currentRow = 0;
+        currentCol += maxTrackSize;
+        maxTrackSize = 0;
+      }
     }
 
-    return {
-      ...item,
-      x,
-      y,
-      w,
-      h,
-      rotation: 0,
-      metadata: {
-        ...item.metadata,
-        gridCellsX: gridW,
-        gridCellsY: gridH
-      }
-    };
+    return { ...item, x, y, w, h, rotation: 0, metadata: { ...item.metadata, gridCellsX: gridW, gridCellsY: gridH } };
   });
 
-  // Center the grid
   const minX = Math.min(...arranged.map(i => i.x));
   const maxX = Math.max(...arranged.map(i => i.x + i.w));
   const minY = Math.min(...arranged.map(i => i.y));
   const maxY = Math.max(...arranged.map(i => i.y + i.h));
 
-  const rawOffsetX = -(minX + maxX) / 2;
-  const rawOffsetY = -(minY + maxY) / 2;
-
-  const offsetX = Math.round(rawOffsetX / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
-  const offsetY = Math.round(rawOffsetY / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+  const offsetX = Math.round((-(minX + maxX) / 2) / slotSize) * slotSize;
+  const offsetY = Math.round((-(minY + maxY) / 2) / slotSize) * slotSize;
 
   return arranged.map(item => ({ ...item, x: item.x + offsetX, y: item.y + offsetY }));
 };
 
-// Bento Layout: Masonry-style with varied sizes
-export const arrangeBento = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+export const arrangeBento = (items: SpatialItem[], options: LayoutOptions): SpatialItem[] => {
   if (items.length === 0) return items;
 
+  const { sortBy, flowDirection = 'horizontal', itemSpacing = 'comfortable' } = options;
   const sorted = sortItems(items, sortBy);
-  const { BENTO_GAP: GAP, BENTO_SMALL: SMALL, BENTO_LARGE_W: LARGE_W, BENTO_LARGE_H: LARGE_H, BENTO_COLS: COLS } = LAYOUT_CONSTANTS;
+  const spacingMult = getSpacingMultiplier(itemSpacing);
+  const GAP = Math.round(20 * spacingMult);
+  const UNIT = 180;
 
-  const colHeights = new Array(COLS).fill(0);
+  const isHorizontal = flowDirection === 'horizontal';
+  const GRID_COLS = isHorizontal ? 4 : 3;
+  const GRID_ROWS = isHorizontal ? 100 : 100;
+
+  const grid: boolean[][] = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(false));
+
+  const bentoSizes = [
+    { w: 2, h: 2 },
+    { w: 2, h: 1 },
+    { w: 1, h: 2 },
+    { w: 1, h: 1 },
+  ];
+
+  const findSlot = (cellW: number, cellH: number): { col: number; row: number } | null => {
+    for (let row = 0; row < GRID_ROWS - cellH + 1; row++) {
+      for (let col = 0; col < GRID_COLS - cellW + 1; col++) {
+        let fits = true;
+        for (let r = 0; r < cellH && fits; r++) {
+          for (let c = 0; c < cellW && fits; c++) {
+            if (grid[row + r][col + c]) fits = false;
+          }
+        }
+        if (fits) return { col, row };
+      }
+    }
+    return null;
+  };
+
+  const markSlot = (col: number, row: number, cellW: number, cellH: number) => {
+    for (let r = 0; r < cellH; r++) {
+      for (let c = 0; c < cellW; c++) {
+        grid[row + r][col + c] = true;
+      }
+    }
+  };
 
   const arranged = sorted.map((item, index) => {
     const { gridCellsX, gridCellsY } = measureNoteContent(item);
-    const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
-    const isLarge = hasCustomSize || index % 4 === 0;
+    
+    let sizeIndex: number;
+    if (index === 0) sizeIndex = 0;
+    else if (index % 5 === 0) sizeIndex = 0;
+    else if (index % 3 === 0) sizeIndex = Math.random() < 0.5 ? 1 : 2;
+    else sizeIndex = 3;
 
-    const w = isLarge ? LARGE_W : SMALL;
-    const h = isLarge ? LARGE_H : SMALL;
-
-    const minHeight = Math.min(...colHeights);
-    const col = colHeights.indexOf(minHeight);
-    const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
-    const y = colHeights[col];
-    colHeights[col] += h + GAP;
-
-    return {
-      ...item,
-      x,
-      y,
-      w,
-      h,
-      rotation: 0,
-      metadata: {
-        ...item.metadata,
-        gridCellsX,
-        gridCellsY
+    const size = bentoSizes[sizeIndex];
+    let slot = findSlot(size.w, size.h);
+    
+    if (!slot) {
+      for (let i = sizeIndex + 1; i < bentoSizes.length; i++) {
+        slot = findSlot(bentoSizes[i].w, bentoSizes[i].h);
+        if (slot) {
+          Object.assign(size, bentoSizes[i]);
+          break;
+        }
       }
-    };
+    }
+
+    if (!slot) slot = { col: 0, row: 0 };
+    markSlot(slot.col, slot.row, size.w, size.h);
+
+    const w = size.w * UNIT + (size.w - 1) * GAP;
+    const h = size.h * UNIT + (size.h - 1) * GAP;
+    const x = slot.col * (UNIT + GAP);
+    const y = slot.row * (UNIT + GAP);
+
+    return { ...item, x, y, w, h, rotation: 0, metadata: { ...item.metadata, gridCellsX, gridCellsY } };
   });
 
-  const maxHeight = Math.max(...colHeights);
-  return arranged.map(item => ({ ...item, y: item.y - maxHeight / 2 }));
+  const minX = Math.min(...arranged.map(i => i.x));
+  const maxX = Math.max(...arranged.map(i => i.x + i.w));
+  const minY = Math.min(...arranged.map(i => i.y));
+  const maxY = Math.max(...arranged.map(i => i.y + i.h));
+  const offsetX = -(minX + maxX) / 2;
+  const offsetY = -(minY + maxY) / 2;
+
+  return arranged.map(item => ({ ...item, x: item.x + offsetX, y: item.y + offsetY }));
 };
 
-// Random Layout: Scattered with slight rotation
-export const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
+export const arrangeRandom = (items: SpatialItem[], options: LayoutOptions): SpatialItem[] => {
   if (items.length === 0) return items;
 
+  const { sortBy, itemSpacing = 'comfortable' } = options;
   const sorted = sortItems(items, sortBy);
-  const { RANDOM_SPREAD: SPREAD, RANDOM_SIZE_MIN: SIZE_MIN, RANDOM_SIZE_MAX: SIZE_MAX, GRID_SLOT_SIZE } = LAYOUT_CONSTANTS;
+  const { RANDOM_SIZE_MIN: SIZE_MIN, RANDOM_SIZE_MAX: SIZE_MAX, GRID_CELL_SIZE, GRID_GAP } = LAYOUT_CONSTANTS;
+  
+  const scatterSpacing = itemSpacing === 'compact' ? 0.7 : itemSpacing === 'spacious' ? 1.6 : 1;
+  const slotSize = GRID_CELL_SIZE + GRID_GAP;
 
   let seed = items.length;
   const seededRandom = () => {
@@ -186,40 +247,58 @@ export const arrangeRandom = (items: SpatialItem[], sortBy: SortOption): Spatial
     return seed / 233280;
   };
 
+  const baseSpread = 180 * Math.sqrt(items.length) * scatterSpacing;
+  const minGap = 60 * scatterSpacing;
+
+  const positions: { x: number; y: number; w: number; h: number }[] = [];
+
   return sorted.map((item) => {
     const { gridCellsX, gridCellsY } = measureNoteContent(item);
-    const { GRID_GAP } = LAYOUT_CONSTANTS;
+    
+    let w: number, h: number;
+    if (item.type === 'note') {
+      w = Math.max(item.w, gridCellsX * slotSize - GRID_GAP);
+      h = Math.max(item.h, gridCellsY * slotSize - GRID_GAP);
+    } else {
+      w = item.w || SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN);
+      h = item.h || SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN);
+    }
 
-    const angle = seededRandom() * Math.PI * 2;
-    const distance = seededRandom() * SPREAD;
+    let x: number, y: number;
+    let attempts = 0;
+    do {
+      const angle = seededRandom() * Math.PI * 2;
+      const distance = 100 + seededRandom() * baseSpread;
+      x = Math.cos(angle) * distance;
+      y = Math.sin(angle) * distance;
+      attempts++;
+    } while (
+      attempts < 80 &&
+      positions.some(p => {
+        const dx = Math.abs(x - p.x);
+        const dy = Math.abs(y - p.y);
+        const overlapX = dx < (w + p.w) / 2 + minGap;
+        const overlapY = dy < (h + p.h) / 2 + minGap;
+        return overlapX && overlapY;
+      })
+    );
+
+    positions.push({ x, y, w, h });
 
     return {
-      ...item,
-      x: Math.cos(angle) * distance,
-      y: Math.sin(angle) * distance,
-      w: item.type === 'note' ? gridCellsX * GRID_SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-      h: item.type === 'note' ? gridCellsY * GRID_SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-      rotation: (seededRandom() - 0.5) * 10,
-      metadata: {
-        ...item.metadata,
-        gridCellsX,
-        gridCellsY
-      }
+      ...item, x, y, w, h,
+      rotation: (seededRandom() - 0.5) * 12,
+      metadata: { ...item.metadata, gridCellsX, gridCellsY }
     };
   });
 };
 
-// Get layout function by type
-export const getLayoutFunction = (layoutType: LayoutType) => {
+export const getLayoutFunction = (layoutType: LayoutType): (items: SpatialItem[], options: LayoutOptions) => SpatialItem[] => {
   switch (layoutType) {
-    case 'grid':
-      return arrangeGrid;
-    case 'bento':
-      return arrangeBento;
-    case 'random':
-      return arrangeRandom;
-    default:
-      return arrangeGrid;
+    case 'grid': return arrangeGrid;
+    case 'bento': return arrangeBento;
+    case 'random': return arrangeRandom;
+    default: return arrangeGrid;
   }
 };
 

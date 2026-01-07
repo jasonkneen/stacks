@@ -254,28 +254,25 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Check for pan triggers: Middle Button (1) or Space Key
-    const isPanTrigger = e.button === 1 || isSpacePressed;
+    const isPanTrigger = e.button === 1 || e.button === 2 || isSpacePressed;
 
     if (e.target === canvasRef.current || (e.target as HTMLElement).id === 'canvas-bg') {
-        // If onBlankCanvasClick is set (AI prompt mode), clear the AI prompt
         if (onBlankCanvasClick && e.button === 0 && !isPanTrigger) {
           onBlankCanvasClick();
           return;
         }
 
         if (isPanTrigger) {
+            e.preventDefault();
             setIsPanning(true);
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
             velocityRef.current = { x: 0, y: 0 };
             cancelAnimationFrame(animationFrameRef.current);
         } else if (e.button === 0) {
-            // Left click on background -> Lasso Selection
             if (!e.shiftKey) {
                 onSelectionChange(new Set());
             }
             const worldPos = screenToWorld(e.clientX, e.clientY);
-            // Initialize 0-size box at click location
             const initialBox = { x: worldPos.x, y: worldPos.y, w: 0, h: 0 };
             selectionBoxRef.current = initialBox;
             setSelectionBox(initialBox);

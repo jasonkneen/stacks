@@ -226,10 +226,10 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
   };
 
   return (
-    <div className="absolute bottom-16 right-0 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden min-w-[340px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+    <div className="absolute bottom-16 right-0 bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/60 overflow-hidden min-w-[340px] z-[9999] animate-in fade-in slide-in-from-bottom-2 duration-200">
       {/* Body */}
       <div className="p-4">
-        <p className="text-xs text-gray-500 mb-3">{getModeDescription()}</p>
+        <p className="text-xs text-gray-700 font-medium mb-3">{getModeDescription()}</p>
 
         {status && (
           <div className="mb-3 p-2.5 bg-blue-50 text-blue-700 text-xs rounded-lg flex items-center gap-2">
@@ -241,13 +241,13 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
         {mode === 'image' && (
           <div className="space-y-3">
             <textarea
-              className="w-full h-24 p-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all text-sm"
+              className="w-full h-24 p-3 bg-white/60 rounded-xl border border-white/40 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 outline-none resize-none transition-all text-sm text-gray-900 placeholder-gray-500"
               placeholder="Describe the image..."
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
             />
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block">Resolution</label>
+              <label className="text-[10px] font-bold text-gray-800 uppercase tracking-wider mb-1.5 block">Resolution</label>
               <div className="flex gap-1.5">
                 {['1K', '2K', '4K'].map((size) => (
                   <button
@@ -255,8 +255,8 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
                     onClick={() => setImageSize(size as any)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                       imageSize === size
-                      ? 'bg-blue-50 border-blue-200 text-blue-700'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                      ? 'bg-blue-100/80 border-blue-300 text-blue-800'
+                      : 'bg-white/60 border-white/40 text-gray-800 hover:bg-white/80'
                     }`}
                   >
                     {size}
@@ -358,14 +358,14 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
         <div className="px-4 pb-4 flex justify-between items-center">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            className="px-3 py-1.5 text-xs text-gray-700 font-medium hover:text-gray-900 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={generate}
             disabled={loading || (!prompt && (mode !== 'video' || !uploadedImage))}
-            className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-1.5"
+            className="px-4 py-2 bg-gray-800 text-white rounded-xl text-xs font-medium hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center gap-1.5"
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             Generate

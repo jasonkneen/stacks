@@ -14,9 +14,10 @@ import { AutoArrangeButton } from './components/AutoArrangeButton';
 import { SearchModal } from './components/SearchModal';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useMCPClient } from './hooks/useMCPClient';
+import { useContentZoom } from './hooks/useContentZoom';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { getFitToViewParams, getLayoutFunction } from './utils/layouts';
-import { Space, SpatialItem, Connection, LayoutType, SortOption } from './types';
+import { Space, SpatialItem, Connection, LayoutType, SortOption, FlowDirection, ItemSpacing } from './types';
 import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
@@ -67,7 +68,8 @@ const INITIAL_SPACES: Record<string, Space> = {
 const elk = new ELK();
 
 const App: React.FC = () => {
-  // Load from localStorage or use initial data
+  const { contentZoom } = useContentZoom();
+  
   const [spaces, setSpacesRaw] = useState<Record<string, Space>>(INITIAL_SPACES);
   const [isLoadingSpaces, setIsLoadingSpaces] = useState(true);
 
@@ -1218,7 +1220,13 @@ const App: React.FC = () => {
   }, [activeSpaceId]);
 
 
-  const handleAutoArrange = useCallback((layoutType: LayoutType, sortBy: SortOption, selectedIds: Set<string>) => {
+  const handleAutoArrange = useCallback((
+    layoutType: LayoutType,
+    sortBy: SortOption,
+    selectedIds: Set<string>,
+    flowDirection: FlowDirection = 'horizontal',
+    itemSpacing: ItemSpacing = 'comfortable'
+  ) => {
     if (activeSpace.items.length === 0) return;
 
     const layout = getLayoutFunction(layoutType);
@@ -1231,7 +1239,7 @@ const App: React.FC = () => {
       ? activeSpace.items.filter(item => !selectedIds.has(item.id))
       : [];
 
-    const arranged = layout(itemsToArrange, sortBy);
+    const arranged = layout(itemsToArrange, { sortBy, flowDirection, itemSpacing });
     const newItems = [...arranged, ...otherItems];
 
     updateItems(newItems);
@@ -1241,7 +1249,9 @@ const App: React.FC = () => {
       [activeSpaceId]: {
         ...prev[activeSpaceId],
         layoutType,
-        sortBy
+        sortBy,
+        flowDirection,
+        itemSpacing
       }
     }));
 
@@ -1338,10 +1348,34 @@ const App: React.FC = () => {
   const currentTheme = themeColors[theme] || themeColors.light;
 
   // Shader selection
-  const selectedShader = localStorage.getItem('background-shader') || 'neuro-noise';
+  const [selectedShader, setSelectedShader] = useState(localStorage.getItem('background-shader') || 'neuro-noise');
+  const [shaderPerformance, setShaderPerformance] = useState(localStorage.getItem('shader-performance') || 'balanced');
+  
+  const [shaderPaused, setShaderPaused] = useState(false);
+  
+  useEffect(() => {
+    if (shaderPerformance === 'quality') return;
+    
+    const handleVisibilityChange = () => {
+      if (shaderPerformance === 'battery') {
+        setShaderPaused(document.hidden);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [shaderPerformance]);
 
   const renderShader = () => {
-    const shaderStyle = { width: '100%', height: '100%' };
+    if (shaderPaused) return null;
+    
+    const scale = shaderPerformance === 'battery' ? 0.5 : shaderPerformance === 'balanced' ? 0.75 : 1;
+    const shaderStyle = { 
+      width: `${100 / scale}%`, 
+      height: `${100 / scale}%`,
+      transform: `scale(${scale})`,
+      transformOrigin: 'top left'
+    };
 
     switch (selectedShader) {
       case 'none':
@@ -1465,28 +1499,47 @@ const App: React.FC = () => {
           <AutoArrangeButton
             layoutType={activeSpace.layoutType || 'grid'}
             sortBy={activeSpace.sortBy || 'updated'}
+            flowDirection={activeSpace.flowDirection || 'horizontal'}
+            itemSpacing={activeSpace.itemSpacing || 'comfortable'}
             onLayoutChange={(layout) => {
-              setSpaces(prev => ({
-                ...prev,
-                [activeSpaceId]: {
-                  ...prev[activeSpaceId],
-                  layoutType: layout
-                }
-              }));
+              if (layout !== 'free') {
+                handleAutoArrange(
+                  layout,
+                  activeSpace.sortBy || 'updated',
+                  new Set(),
+                  activeSpace.flowDirection || 'horizontal',
+                  activeSpace.itemSpacing || 'comfortable'
+                );
+              } else {
+                setSpaces(prev => ({ ...prev, [activeSpaceId]: { ...prev[activeSpaceId], layoutType: layout } }));
+              }
             }}
             onSortChange={(sort) => {
-              setSpaces(prev => ({
-                ...prev,
-                [activeSpaceId]: {
-                  ...prev[activeSpaceId],
-                  sortBy: sort
-                }
-              }));
+              const layout = activeSpace.layoutType || 'grid';
+              if (layout !== 'free') {
+                handleAutoArrange(layout, sort, new Set(), activeSpace.flowDirection || 'horizontal', activeSpace.itemSpacing || 'comfortable');
+              } else {
+                setSpaces(prev => ({ ...prev, [activeSpaceId]: { ...prev[activeSpaceId], sortBy: sort } }));
+              }
+            }}
+            onFlowChange={(flow) => {
+              const layout = activeSpace.layoutType || 'grid';
+              if (layout !== 'free') {
+                handleAutoArrange(layout, activeSpace.sortBy || 'updated', new Set(), flow, activeSpace.itemSpacing || 'comfortable');
+              }
+            }}
+            onSpacingChange={(spacing) => {
+              const layout = activeSpace.layoutType || 'grid';
+              if (layout !== 'free') {
+                handleAutoArrange(layout, activeSpace.sortBy || 'updated', new Set(), activeSpace.flowDirection || 'horizontal', spacing);
+              }
             }}
             onArrange={() => handleAutoArrange(
               activeSpace.layoutType || 'grid',
               activeSpace.sortBy || 'updated',
-              new Set() // Empty set = arrange ALL items
+              new Set(),
+              activeSpace.flowDirection || 'horizontal',
+              activeSpace.itemSpacing || 'comfortable'
             )}
           />
         </div>
@@ -1607,6 +1660,7 @@ const App: React.FC = () => {
                 }));
               }}
               contextTip={contextTip}
+              contentZoom={contentZoom}
           />
         </div>
       )}
@@ -1760,7 +1814,7 @@ const App: React.FC = () => {
           <div className="relative">
             {/* Add Menu Dropdown */}
             {showAddMenu && (
-              <div className="absolute bottom-16 right-0 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200/50 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="absolute bottom-16 right-0 bg-white/40 backdrop-blur-md rounded-2xl shadow-2xl border border-white/60 p-2 flex flex-col gap-1 min-w-[160px] animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <button
                   className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
                   onClick={() => {
@@ -1946,6 +2000,8 @@ const App: React.FC = () => {
         <SettingsModal
           onClose={() => setShowSettings(false)}
           onThemeChange={(newTheme) => setTheme(newTheme)}
+          onShaderChange={(shader) => setSelectedShader(shader)}
+          onShaderPerformanceChange={(perf) => setShaderPerformance(perf)}
         />
       )}
 

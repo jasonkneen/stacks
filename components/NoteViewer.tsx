@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { SpatialItem } from '../types';
-import { ArrowLeft, Type, Heading1, Heading2, AlignLeft, List, CheckSquare, Code, X, Plus } from 'lucide-react';
+import { ArrowLeft, Type, Heading1, Heading2, AlignLeft, List, CheckSquare, Code, X, Plus, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
   item: SpatialItem;
@@ -26,6 +26,7 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
   const [blockMenuPosition, setBlockMenuPosition] = useState({ x: 0, y: 0 });
   const [selectedBlockIndex, setSelectedBlockIndex] = useState(0);
   const [formatButtonPosition, setFormatButtonPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isContentFocused, setIsContentFocused] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -92,21 +93,116 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
       icon: <Code size={18} />,
       shortcut: '⇧⌘C',
       action: () => document.execCommand('formatBlock', false, 'pre')
+    },
+    {
+      id: 'image',
+      label: 'Image',
+      icon: <ImageIcon size={18} />,
+      shortcut: '⌘I',
+      action: () => handleImageUpload()
     }
   ];
+
+  const insertTaskItem = (indent: number = 0): HTMLDivElement => {
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item';
+    taskItem.setAttribute('data-indent', String(indent));
+    taskItem.style.marginLeft = `${indent * 24}px`;
+    taskItem.innerHTML = '<input type="checkbox" /><span class="task-text" contenteditable="true"></span>';
+    return taskItem;
+  };
 
   const insertTaskList = () => {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
-      const taskItem = document.createElement('div');
-      taskItem.className = 'task-item';
-      taskItem.innerHTML = '<input type="checkbox" /> <span contenteditable="true">Task item</span>';
+      const taskItem = insertTaskItem(0);
+      range.deleteContents();
       range.insertNode(taskItem);
+      const textSpan = taskItem.querySelector('.task-text') as HTMLElement;
+      if (textSpan) {
+        textSpan.focus();
+      }
     }
   };
 
-  // Initialize content once
+  const getTaskItemFromSelection = (): { taskItem: HTMLElement; textSpan: HTMLElement } | null => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    
+    let node: Node | null = selection.anchorNode;
+    while (node && node !== contentRef.current) {
+      if (node instanceof HTMLElement && node.classList.contains('task-item')) {
+        const textSpan = node.querySelector('.task-text') as HTMLElement;
+        return textSpan ? { taskItem: node, textSpan } : null;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  };
+
+  const insertImageBlock = (src: string) => {
+    const selection = window.getSelection();
+    const imageBlock = document.createElement('div');
+    imageBlock.className = 'image-block';
+    imageBlock.contentEditable = 'false';
+    imageBlock.innerHTML = `<img src="${src}" alt="" /><div class="image-resize-handle"></div>`;
+    
+    if (selection && selection.rangeCount > 0 && contentRef.current?.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(imageBlock);
+      range.setStartAfter(imageBlock);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else if (contentRef.current) {
+      contentRef.current.appendChild(imageBlock);
+    }
+  };
+
+  const handleImageUpload = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          if (dataUrl) {
+            insertImageBlock(dataUrl);
+            setShowBlockMenu(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          if (dataUrl) insertImageBlock(dataUrl);
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
   useEffect(() => {
     if (contentRef.current && !contentRef.current.innerHTML) {
       contentRef.current.innerHTML = item.content;
@@ -123,9 +219,7 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
     return () => clearTimeout(timer);
   }, []);
 
-  // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Only handle Escape globally
     if (e.key === 'Escape') {
       if (showBlockMenu) {
         setShowBlockMenu(false);
@@ -135,7 +229,6 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
       return;
     }
 
-    // Block menu navigation (only when menu is open)
     if (showBlockMenu) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -151,11 +244,58 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
       return;
     }
 
-    // Only handle format shortcuts when content is focused and modifier key is pressed
-    const isContentFocused = contentRef.current?.contains(document.activeElement) || document.activeElement === contentRef.current;
-    if (!isContentFocused) return;
+    const contentFocused = contentRef.current?.contains(document.activeElement) || document.activeElement === contentRef.current;
+    if (!contentFocused) return;
 
-    // Format shortcuts (Cmd/Ctrl + number)
+    const taskContext = getTaskItemFromSelection();
+    
+    if (e.key === 'Enter' && !e.shiftKey && taskContext) {
+      e.preventDefault();
+      const { taskItem } = taskContext;
+      const indent = parseInt(taskItem.getAttribute('data-indent') || '0');
+      const newTask = insertTaskItem(indent);
+      taskItem.after(newTask);
+      const textSpan = newTask.querySelector('.task-text') as HTMLElement;
+      if (textSpan) {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.setStart(textSpan, 0);
+        range.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        textSpan.focus();
+      }
+      return;
+    }
+
+    if (e.key === 'Tab' && taskContext) {
+      e.preventDefault();
+      const { taskItem, textSpan } = taskContext;
+      let indent = parseInt(taskItem.getAttribute('data-indent') || '0');
+      if (e.shiftKey) {
+        indent = Math.max(0, indent - 1);
+      } else {
+        indent = Math.min(5, indent + 1);
+      }
+      taskItem.setAttribute('data-indent', String(indent));
+      taskItem.style.marginLeft = `${indent * 24}px`;
+      textSpan.focus();
+      return;
+    }
+
+    const selection = window.getSelection();
+    const inList = selection?.anchorNode?.parentElement?.closest('ul, ol, li');
+    
+    if (e.key === 'Tab' && inList) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        document.execCommand('outdent');
+      } else {
+        document.execCommand('indent');
+      }
+      return;
+    }
+
     if (e.metaKey || e.ctrlKey) {
       if (e.key === '1') {
         e.preventDefault();
@@ -209,15 +349,11 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
     return () => document.removeEventListener('selectionchange', updateFormatButtonPosition);
   }, [updateFormatButtonPosition]);
 
-  // Open format menu via button click
   const handleFormatButtonClick = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+    if (formatButtonPosition) {
       setBlockMenuPosition({
-        x: rect.left,
-        y: rect.bottom + 8
+        x: formatButtonPosition.x + 44,
+        y: formatButtonPosition.y - 8
       });
       setShowBlockMenu(true);
       setSelectedBlockIndex(0);
@@ -300,9 +436,9 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
         <div className="flex items-center gap-3">
           <button
             onClick={handleClose}
-            className="p-3 bg-white/90 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors"
+            className="p-3 bg-white/40 backdrop-blur-md border border-white/60 rounded-full shadow-lg hover:bg-white/60 transition-colors"
           >
-            <ArrowLeft size={20} className="text-gray-700" />
+            <ArrowLeft size={20} className="text-gray-900" />
           </button>
 
           {isEditingTitle ? (
@@ -327,10 +463,10 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
             </div>
           ) : (
             <div
-              className="px-5 py-2.5 bg-white/90 backdrop-blur-md rounded-full shadow-lg cursor-pointer hover:bg-white transition-colors"
+              className="px-5 py-2.5 bg-white/40 backdrop-blur-md border border-white/60 rounded-full shadow-lg cursor-pointer hover:bg-white/60 transition-colors"
               onDoubleClick={() => setIsEditingTitle(true)}
             >
-              <span className="text-gray-700 font-semibold text-sm">{title || 'Untitled'}</span>
+              <span className="text-gray-900 font-semibold text-sm">{title || 'Untitled'}</span>
             </div>
           )}
         </div>
@@ -345,21 +481,21 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
           contentEditable
           suppressContentEditableWarning
           onInput={handleInput}
+          onFocus={() => setIsContentFocused(true)}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
           onBlur={() => {
+            setIsContentFocused(false);
+            setFormatButtonPosition(null);
             if (contentRef.current) {
               onUpdateContent(contentRef.current.innerHTML);
             }
           }}
+          onKeyUp={updateFormatButtonPosition}
+          onClick={updateFormatButtonPosition}
         />
 
-        {/* Bottom Hint */}
-        <div
-          className={`p-4 border-t border-gray-100 text-center text-xs text-gray-400 transition-opacity duration-300 ${
-            isAnimating || isClosing ? 'opacity-0' : 'opacity-100'
-          }`}
-        >
-          Type <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 font-mono">/</span> for formatting options
-        </div>
+
 
         <style>{`
           .note-content { outline: none; cursor: text; }
@@ -373,29 +509,71 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
           .note-content pre { background: #1a1a1a; color: #e5e5e5; padding: 1em; border-radius: 8px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; overflow-x: auto; margin-bottom: 1em; }
           .note-content code { background: #f3f4f6; color: #1a1a1a; padding: 0.2em 0.4em; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; }
           .note-content pre code { background: transparent; color: inherit; padding: 0; }
-          .note-content .task-item { display: flex; align-items: center; gap: 8px; margin-bottom: 0.5em; }
-          .note-content .task-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3b82f6; }
+          .note-content .task-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 0.75em; padding: 2px 0; }
+          .note-content .task-item input[type="checkbox"] { 
+            appearance: none; -webkit-appearance: none;
+            width: 20px; height: 20px; min-width: 20px;
+            border: 2px solid #d1d5db; border-radius: 6px;
+            cursor: pointer; margin-top: 2px;
+            transition: all 0.15s ease;
+          }
+          .note-content .task-item input[type="checkbox"]:hover { border-color: #9ca3af; }
+          .note-content .task-item input[type="checkbox"]:checked { 
+            border-color: #10b981; background: transparent;
+          }
+          .note-content .task-item input[type="checkbox"]:checked::after {
+            content: ''; display: block;
+            width: 5px; height: 10px;
+            border: solid #10b981; border-width: 0 2.5px 2.5px 0;
+            transform: rotate(45deg) translate(-1px, -1px);
+            margin: 2px auto;
+          }
+          .note-content .task-item:has(input:checked) .task-text { color: #9ca3af; text-decoration: line-through; }
+          .note-content .task-item .task-text { flex: 1; outline: none; line-height: 1.5; }
+          .note-content .task-item .task-text:empty:before { content: 'Start typing...'; color: #d1d5db; }
+          .note-content .image-block { 
+            position: relative; width: 100%; margin: 1.5em 0; 
+            border-radius: 12px; overflow: hidden; 
+            user-select: none;
+          }
+          .note-content .image-block img { 
+            width: 100%; height: auto; display: block; 
+            object-fit: cover;
+          }
+          .note-content .image-block:hover .image-resize-handle { opacity: 1; }
+          .note-content .image-block .image-resize-handle {
+            position: absolute; bottom: 8px; right: 8px;
+            width: 24px; height: 24px;
+            background: rgba(0,0,0,0.6); border-radius: 6px;
+            cursor: se-resize; opacity: 0;
+            transition: opacity 0.15s;
+            display: flex; align-items: center; justify-content: center;
+          }
+          .note-content .image-block .image-resize-handle::after {
+            content: ''; width: 10px; height: 10px;
+            border-right: 2px solid white; border-bottom: 2px solid white;
+          }
           .note-content:empty:before { content: 'Start typing...'; color: #9ca3af; pointer-events: none; display: block; }
           .note-content ::selection { background: #fef08a; }
         `}</style>
       </div>
 
       {/* Format Button (appears at cursor line) */}
-      {formatButtonPosition && !showBlockMenu && !isAnimating && !isClosing && (
+      {isContentFocused && formatButtonPosition && !showBlockMenu && !isAnimating && !isClosing && (
         <button
-          className="fixed z-[120] w-7 h-7 flex items-center justify-center bg-gray-900/90 hover:bg-gray-800 rounded-lg shadow-lg border border-white/10 transition-all hover:scale-110"
+          className="fixed z-[120] w-8 h-8 flex items-center justify-center bg-white/40 backdrop-blur-md hover:bg-white/60 rounded-full shadow-lg border border-white/60 transition-all hover:scale-110"
           style={{ left: formatButtonPosition.x, top: formatButtonPosition.y }}
           onClick={handleFormatButtonClick}
-          onMouseDown={(e) => e.preventDefault()} // Prevent losing focus
+          onMouseDown={(e) => e.preventDefault()}
         >
-          <Plus size={16} className="text-white/70" />
+          <Plus size={16} className="text-gray-900" />
         </button>
       )}
 
       {/* Block Format Menu */}
       {showBlockMenu && (
         <div
-          className="fixed z-[130] bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 py-2 min-w-[220px] animate-in fade-in zoom-in-95 duration-150"
+          className="fixed z-[9999] bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/60 py-2 min-w-[220px] animate-in fade-in zoom-in-95 duration-150"
           style={{ left: blockMenuPosition.x, top: blockMenuPosition.y }}
         >
           {blockOptions.map((option, index) => (
@@ -404,13 +582,13 @@ export const NoteViewer: React.FC<Props> = ({ item, sourceRect, onClose, onUpdat
               onClick={() => selectBlockOption(option)}
               className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
                 index === selectedBlockIndex
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  ? 'bg-gray-800/15 text-gray-900'
+                  : 'text-gray-800 hover:bg-gray-800/10 hover:text-gray-900'
               }`}
             >
-              <span className="text-white/50">{option.icon}</span>
-              <span className="flex-1 font-medium">{option.label}</span>
-              <span className="text-xs text-white/40 font-mono">{option.shortcut}</span>
+              <span className="text-gray-700">{option.icon}</span>
+              <span className="flex-1 font-semibold">{option.label}</span>
+              <span className="text-xs text-gray-600 font-mono">{option.shortcut}</span>
             </button>
           ))}
         </div>

@@ -92,7 +92,7 @@ export const ContextToolbar: React.FC<Props> = ({
 
             {/* Color Picker Dropdown */}
             {showColorPicker && (
-              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200/50 p-3 flex items-center gap-2">
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 bg-white/40 backdrop-blur-md rounded-2xl shadow-2xl border border-white/60 p-3 flex items-center gap-2">
                 {COLORS.map((color) => (
                   <button
                     key={color.class}
@@ -130,7 +130,7 @@ export const ContextToolbar: React.FC<Props> = ({
         {hasPrompt && (
           <button
             onClick={() => onRegenerate(selection)}
-            className="p-2.5 rounded-2xl text-green-600 hover:text-green-700 hover:bg-green-500/10 transition-all active:scale-95 duration-150"
+            className={btnClass}
             title="Regenerate with original prompt"
           >
             <RefreshCw size={20} />
@@ -144,7 +144,7 @@ export const ContextToolbar: React.FC<Props> = ({
             const rect = e.currentTarget.getBoundingClientRect();
             onAIChat(selection, { x: window.innerWidth / 2, y: rect.top - 20 });
           }}
-          className="p-2.5 rounded-2xl text-blue-600 hover:text-blue-700 hover:bg-blue-500/10 transition-all active:scale-95 duration-150"
+          className={btnClass}
           title="Ask AI about selection"
         >
           <Sparkles size={20} />
@@ -153,7 +153,7 @@ export const ContextToolbar: React.FC<Props> = ({
         {/* Delete */}
         <button
           onClick={() => onDelete(selection)}
-          className="p-2.5 rounded-2xl text-red-600 hover:text-red-700 hover:bg-red-500/10 transition-all active:scale-95 duration-150"
+          className="p-2 rounded-2xl text-gray-800 hover:text-red-600 hover:bg-red-500/10 transition-all active:scale-95 duration-150 relative"
           title="Delete"
         >
           <Trash2 size={20} />

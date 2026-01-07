@@ -3,6 +3,8 @@ export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder';
 // Auto-arrange layout types
 export type LayoutType = 'grid' | 'bento' | 'random' | 'free';
 export type SortOption = 'updated' | 'added' | 'name' | 'type';
+export type FlowDirection = 'horizontal' | 'vertical';
+export type ItemSpacing = 'compact' | 'comfortable' | 'spacious';
 
 export interface SpatialItem {
   id: string;
@@ -60,6 +62,8 @@ export interface Space {
   // Auto-arrange preferences (last used)
   layoutType?: LayoutType;
   sortBy?: SortOption;
+  flowDirection?: FlowDirection;
+  itemSpacing?: ItemSpacing;
 }
 
 export interface SelectionState {

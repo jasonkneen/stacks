@@ -201,7 +201,7 @@ export const AIChat: React.FC<Props> = ({
           transform: 'translate(-50%, -100%) translateY(-16px)'
         }}
       >
-        <div className="bg-white/90 backdrop-blur-xl border border-white/60 rounded-2xl shadow-2xl overflow-hidden min-w-[420px]">
+        <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl shadow-2xl overflow-hidden min-w-[420px]">
           {/* Target Node Chip */}
           {targetNodeLabel && (
             <div className="px-4 pt-3 pb-2 border-b border-gray-200/50">

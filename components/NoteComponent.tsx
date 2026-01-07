@@ -10,6 +10,7 @@ interface Props {
 
 export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const allowInlineEditing = false;
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -116,7 +117,7 @@ export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote
         className="w-full h-full overflow-y-auto rounded-3xl"
         // Stop propagation ONLY when editing to allow dragging when not editing.
         onMouseDown={(e) => isEditing && e.stopPropagation()}
-        onDoubleClick={() => setIsEditing(true)}
+        onDoubleClick={() => allowInlineEditing ? setIsEditing(true) : handleOpenViewer()}
       >
         <div
             ref={contentRef}
