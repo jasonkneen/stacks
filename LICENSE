@@ -1,0 +1,49 @@
+Stacks Community License v1.0
+
+Copyright (c) 2025 Jason Kneen
+
+TERMS AND CONDITIONS
+
+1. DEFINITIONS
+
+"Software" refers to Stacks and all associated source code, documentation, and assets.
+"Personal Use" means use by an individual for non-commercial purposes.
+"Commercial Use" means any use within a business, for-profit organization, or any activity that generates revenue directly or indirectly.
+"Open Source Distribution" means distribution of modified or unmodified versions of the Software under this same license.
+
+2. PERSONAL USE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this Software, to use, copy, modify, and distribute the Software for Personal Use, subject to the following conditions:
+
+- The above copyright notice and this license shall be included in all copies or substantial portions of the Software.
+- The Software is provided "as is", without warranty of any kind.
+
+3. OPEN SOURCE DISTRIBUTION
+
+You may fork, modify, rebrand, and redistribute this Software under a different name, provided that:
+
+- The redistributed software remains open source under this same license
+- The original copyright notice is retained
+- A link to the original repository is included in documentation
+- The redistributed software includes this license file
+
+4. COMMERCIAL USE
+
+Commercial Use of this Software requires a paid license. A one-time license fee of $49 USD grants:
+
+- Unlimited commercial use
+- Right to modify and incorporate into commercial products
+- No attribution requirement in commercial products
+- Perpetual license with no recurring fees
+
+To purchase a commercial license, visit: http://bit.ly/4aNe23d
+
+Using this Software for Commercial Use without a valid license is a violation of these terms.
+
+5. DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+6. TERMINATION
+
+This license automatically terminates if you violate any of these terms. Upon termination, you must destroy all copies of the Software in your possession.

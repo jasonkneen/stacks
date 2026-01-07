@@ -8,7 +8,7 @@
 
 import { WebSocketServer, WebSocket } from "ws";
 import { spawn, ChildProcess } from "child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -42,9 +42,10 @@ interface ClientMessage {
   requestId?: string | number;
 }
 
-// Config paths
 const configDir = join(homedir(), ".stacks");
+const legacyConfigDir = join(homedir(), ".spatial");
 const configPath = join(configDir, "mcp-proxy-config.json");
+const legacyConfigPath = join(legacyConfigDir, "mcp-proxy-config.json");
 
 // Default config
 const DEFAULT_CONFIG: ProxyConfig = {
@@ -52,11 +53,16 @@ const DEFAULT_CONFIG: ProxyConfig = {
   servers: {}
 };
 
-// Load/save config
 function loadConfig(): ProxyConfig {
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true });
   }
+  
+  if (existsSync(legacyConfigPath) && !existsSync(configPath)) {
+    copyFileSync(legacyConfigPath, configPath);
+    console.log("Migrated MCP config from ~/.spatial to ~/.stacks");
+  }
+  
   if (!existsSync(configPath)) {
     writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2));
     return DEFAULT_CONFIG;

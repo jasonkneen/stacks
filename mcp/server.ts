@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -40,13 +40,22 @@ interface Space {
   camera: { x: number; y: number; zoom: number };
 }
 
-// Database setup
-const dataDir = join(homedir(), ".stacks");
-if (!existsSync(dataDir)) {
-  mkdirSync(dataDir, { recursive: true });
+const newDataDir = join(homedir(), ".stacks");
+const legacyDataDir = join(homedir(), ".spatial");
+const legacyDbPath = join(legacyDataDir, "canvas.db");
+const newDbPath = join(newDataDir, "canvas.db");
+
+if (!existsSync(newDataDir)) {
+  mkdirSync(newDataDir, { recursive: true });
 }
 
-const db = new Database(join(dataDir, "canvas.db"));
+if (existsSync(legacyDbPath) && !existsSync(newDbPath)) {
+  copyFileSync(legacyDbPath, newDbPath);
+  console.error("Migrated database from ~/.spatial to ~/.stacks");
+}
+
+const dataDir = newDataDir;
+const db = new Database(newDbPath);
 
 // Initialize schema
 db.exec(`

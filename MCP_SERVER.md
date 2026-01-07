@@ -1,4 +1,4 @@
-# Spatial Canvas MCP Integration
+# Stacks MCP Integration
 
 This project includes both MCP **server** (exposing the canvas to AI) and MCP **client** (consuming external MCP servers) capabilities.
 
@@ -6,7 +6,7 @@ This project includes both MCP **server** (exposing the canvas to AI) and MCP **
 
 ## Part 1: MCP Server (Exposing Canvas to AI)
 
-The MCP server exposes the Spatial Canvas to AI assistants like Claude, allowing them to create, modify, and organize items on your canvas programmatically.
+The MCP server exposes the Stacks canvas to AI assistants like Claude, allowing them to create, modify, and organize items on your canvas programmatically.
 
 ## Setup
 
@@ -23,9 +23,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spatial-canvas": {
+    "stacks-canvas": {
       "command": "node",
-      "args": ["/path/to/spatial/dist/mcp/server.js"]
+      "args": ["/path/to/stacks/dist/mcp/server.js"]
     }
   }
 }
@@ -100,7 +100,7 @@ The server includes AI workflow prompts:
 
 Canvas data is persisted in SQLite at:
 ```
-~/.spatial/canvas.db
+~/.stacks/canvas.db
 ```
 
 ## Development
@@ -212,7 +212,7 @@ const data = await mcp.readResource('filesystem', 'file:///path/to/file');
 
 ### Proxy Configuration
 
-The proxy stores its config at `~/.spatial/mcp-proxy-config.json`:
+The proxy stores its config at `~/.stacks/mcp-proxy-config.json`:
 
 ```json
 {

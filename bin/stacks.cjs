@@ -9,15 +9,31 @@ const https = require('https')
 const APP_NAME = 'stacks-ai'
 const APP_DIR = path.join(__dirname, '..')
 const CACHE_DIR = path.join(os.homedir(), '.stacks')
+const LEGACY_CACHE_DIR = path.join(os.homedir(), '.spatial')
 const ELECTRON_CACHE = path.join(CACHE_DIR, 'electron')
 const UPDATE_CHECK_FILE = path.join(CACHE_DIR, 'last-update-check')
 const PID_FILE = path.join(CACHE_DIR, 'stacks.pid')
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000
 
+function migrateLegacyData() {
+  if (!fs.existsSync(LEGACY_CACHE_DIR)) return
+  
+  const filesToMigrate = ['canvas.db', 'mcp-proxy-config.json']
+  filesToMigrate.forEach(file => {
+    const legacyPath = path.join(LEGACY_CACHE_DIR, file)
+    const newPath = path.join(CACHE_DIR, file)
+    if (fs.existsSync(legacyPath) && !fs.existsSync(newPath)) {
+      fs.copyFileSync(legacyPath, newPath)
+      console.log(`Migrated ${file} from ~/.spatial to ~/.stacks`)
+    }
+  })
+}
+
 function ensureCacheDir() {
   if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true })
   }
+  migrateLegacyData()
   if (!fs.existsSync(ELECTRON_CACHE)) {
     fs.mkdirSync(ELECTRON_CACHE, { recursive: true })
   }

@@ -86,7 +86,15 @@ When you run `npx stacks-ai` or `stacks-ai`:
 
 ## License
 
-MIT
+**Stacks Community License v1.0**
+
+- **Personal Use**: Free to use, modify, and distribute for personal, non-commercial purposes
+- **Open Source Distribution**: Free to fork, rebrand, and publish under a different name, provided it remains open source under this same license
+- **Commercial Use**: Requires a one-time license fee of $49 USD. Commercial use includes any use within a business, for-profit organization, or any revenue-generating activity. Purchase at [bit.ly/4aNe23d](http://bit.ly/4aNe23d)
+
+Commercial license grants unrestricted use of the code for your business.
+
+See [LICENSE](LICENSE) for full terms.
 
 ## Author
 
