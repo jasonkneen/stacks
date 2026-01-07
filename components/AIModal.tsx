@@ -63,8 +63,9 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
     try {
       if (mode === 'text') {
         const ai = await getClient();
+        const model = localStorage.getItem('text-model') || 'gemini-2.5-flash-lite';
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-lite',
+          model,
           contents: prompt,
         });
         const text = response.text;
@@ -75,10 +76,11 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
 
       } else if (mode === 'image') {
         setStatus('Generating image...');
-        const ai = await getClient(); 
-        
+        const ai = await getClient();
+        const model = localStorage.getItem('image-generation-model') || 'gemini-3-pro-image-preview';
+
         const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
+          model,
           contents: {
             parts: [{ text: prompt }],
           },
@@ -208,8 +210,9 @@ export const AIModal: React.FC<AIModalProps> = ({ onClose, onGenerate }) => {
             
             try {
                 const ai = await getClient();
+                const model = localStorage.getItem('text-model') || 'gemini-3-flash-preview';
                 const response = await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview',
+                    model,
                     contents: {
                         parts: [
                             { inlineData: { mimeType: 'audio/mp3', data: base64Audio } },

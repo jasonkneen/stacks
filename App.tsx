@@ -141,8 +141,42 @@ const App: React.FC = () => {
 
         const saved = await loadSpaces();
         if (saved) {
+          // Fix items with [NOTE:...] markup that are not type 'note'
+          const fixed = Object.fromEntries(
+            Object.entries(saved).map(([id, space]) => [
+              id,
+              {
+                ...space,
+                items: space.items.map(item => {
+                  // If item has [NOTE:...] markup, extract content and convert to note
+                  const noteMatch = item.content?.match(/\[NOTE:([^\]]+)\]([\s\S]*?)\[\/NOTE\]/);
+                  if (noteMatch) {
+                    const title = noteMatch[1];
+                    let content = noteMatch[2].trim();
+
+                    // If content doesn't start with heading, prepend title as h1 with spacing
+                    if (!content.startsWith('<h1') && !content.startsWith('<h2')) {
+                      content = `<h1>${title}</h1>\n\n${content}`;
+                    }
+
+                    console.log('[App] Fixing item with NOTE markup:', item.id, 'from', item.type, 'to note');
+                    return {
+                      ...item,
+                      type: 'note' as const,
+                      content,
+                      metadata: {
+                        ...item.metadata,
+                        title
+                      }
+                    };
+                  }
+                  return item;
+                })
+              }
+            ])
+          );
           console.log('[App] Setting initial spaces from saved data');
-          setSpaces(saved);
+          setSpaces(fixed);
         } else {
           console.log('[App] No saved data, using INITIAL_SPACES');
         }
@@ -182,7 +216,8 @@ const App: React.FC = () => {
     targetNodeId?: string; // For smart routing to existing connections
   } | null>(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [contextTip, setContextTip] = useState<string>('Space + Drag to pan');
 
   // MCP Client for AI tools
   const mcp = useMCPClient({ autoConnect: true });
@@ -198,6 +233,29 @@ const App: React.FC = () => {
     if (!spaces) return [INITIAL_SPACES[ROOT_SPACE_ID]];
     return Object.values(spaces).filter(s => s?.parentId === null);
   }, [spaces]);
+
+  // Update contextual tip based on selection and layout
+  useEffect(() => {
+    const layoutType = activeSpace.layoutType || 'grid';
+    const count = selection.size;
+
+    if (count === 0) {
+      setContextTip('Space + Drag to pan');
+    } else if (count === 1) {
+      setContextTip('Select 2+ items to arrange');
+    } else {
+      // 2+ items selected - show arrange tips
+      if (layoutType === 'grid') {
+        setContextTip('Grid: Snaps items to grid cells with equal spacing');
+      } else if (layoutType === 'bento') {
+        setContextTip('Bento: Horizontal layout in rows');
+      } else if (layoutType === 'random') {
+        setContextTip('Random: Scattered arrangement');
+      } else {
+        setContextTip('Canvas: Free-form positioning');
+      }
+    }
+  }, [selection.size, activeSpace.layoutType]);
 
   // Helper to update items in the current space
   // Accepts either a full array OR a function that transforms current items
@@ -643,12 +701,12 @@ const App: React.FC = () => {
   }, [activeSpaceId]);
 
   // Create item from AI response format
-  const createItemFromAIResponse = useCallback((response: AIResponse, sourceItem: SpatialItem, index: number = 0): SpatialItem => {
+  const createItemFromAIResponse = useCallback((response: AIResponse, sourceItem: SpatialItem | null, index: number = 0): SpatialItem => {
     const baseZIndex = Math.max(...activeSpace.items.map(i => i.zIndex), 0);
     const now = Date.now();
 
-    const baseX = sourceItem.x + sourceItem.w + 100 + (index * 60);
-    const baseY = sourceItem.y + (index * 60);
+    const baseX = sourceItem ? sourceItem.x + sourceItem.w + 100 + (index * 60) : (index * 60);
+    const baseY = sourceItem ? sourceItem.y + (index * 60) : (index * 60);
 
     switch (response.format) {
       case 'sticky':
@@ -683,6 +741,14 @@ const App: React.FC = () => {
       case 'note':
       case 'document':
       default:
+        let content = response.content;
+        const title = response.metadata?.title;
+
+        // If title exists and content doesn't start with heading, prepend it
+        if (title && !content.startsWith('<h1') && !content.startsWith('<h2')) {
+          content = `<h1>${title}</h1>\n\n${content}`;
+        }
+
         return {
           id: `ai-note-${now}-${index}`,
           type: 'note',
@@ -692,9 +758,9 @@ const App: React.FC = () => {
           h: 400,
           zIndex: baseZIndex + index + 1,
           rotation: (Math.random() - 0.5) * 4,
-          content: response.content,
+          content,
           metadata: {
-            title: response.metadata?.title,
+            title,
             createdAt: now,
             updatedAt: now
           }
@@ -708,15 +774,18 @@ const App: React.FC = () => {
     prompt: string,
     options?: AIOptions,
     existingItemId?: string,
-    targetNodeId?: string
+    targetNodeId?: string,
+    canvasPosition?: { x: number; y: number }
   ) => {
     // Get source items (single or multiple)
     const sourceIds = Array.isArray(sourceItemId) ? sourceItemId : [sourceItemId];
     const sourceItems = activeSpace.items.filter(i => sourceIds.includes(i.id));
-    if (sourceItems.length === 0) return;
 
-    // Use first item as primary for positioning
-    const sourceItem = sourceItems[0];
+    // If no source items and no canvas position, bail
+    if (sourceItems.length === 0 && !canvasPosition) return;
+
+    // Use first item as primary for positioning, or center if no source
+    const sourceItem = sourceItems.length > 0 ? sourceItems[0] : null;
 
     // If targetNodeId is set, check if it's a folder/stack
     let targetSpaceId = activeSpaceId;
@@ -734,13 +803,16 @@ const App: React.FC = () => {
     // Determine initial type from options - use source dimensions for consistency
     const initialType = options?.outputType === 'image' ? 'image' : (options?.outputType || 'note');
 
+    // Default dimensions for new items
+    const defaultDimensions = { w: 320, h: 400 };
+
     const newItem: SpatialItem = {
       id: newItemId,
       type: initialType as 'sticky' | 'note' | 'image',
-      x: sourceItem.x + sourceItem.w + 100,
-      y: sourceItem.y,
-      w: sourceItem.w,
-      h: sourceItem.h,
+      x: sourceItem ? sourceItem.x + sourceItem.w + 100 : (canvasPosition ? canvasPosition.x - window.innerWidth/2 : 0),
+      y: sourceItem ? sourceItem.y : (canvasPosition ? canvasPosition.y - window.innerHeight/2 : 0),
+      w: sourceItem ? sourceItem.w : defaultDimensions.w,
+      h: sourceItem ? sourceItem.h : defaultDimensions.h,
       zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
       rotation: (Math.random() - 0.5) * 4,
       content: '',
@@ -770,13 +842,13 @@ const App: React.FC = () => {
           items: existingItem
             ? targetSpace.items.map(i => i.id === newItemId ? { ...i, ...finalItem } : i)
             : [...targetSpace.items, finalItem],
-          connections: existingItem || targetSpaceId !== activeSpaceId
+          connections: existingItem || targetSpaceId !== activeSpaceId || !sourceItem
             ? targetSpace.connections
             : [
                 ...(targetSpace.connections || []),
                 {
                   id: `conn-${Date.now()}`,
-                  from: sourceItemId,
+                  from: sourceItemId as string,
                   to: newItemId
                 }
               ]
@@ -792,13 +864,13 @@ const App: React.FC = () => {
       // Get provider from settings
       const selectedProvider = (localStorage.getItem('ai-provider') || 'google') as AIProvider;
 
-      // Prepare context from all source items
-      const contextParts = sourceItems.map(item => {
+      // Prepare context from all source items (empty if no source items)
+      const contextParts = sourceItems.length > 0 ? sourceItems.map(item => {
         const isVisual = item.type === 'image' || item.type === 'video';
         return isVisual
           ? `[${item.type}: ${item.metadata?.description as string || 'Visual content'}]`
           : item.content.replace(/<[^>]*>/g, ' ').trim();
-      });
+      }) : [];
       const contextText = contextParts.join('\n\n');
 
       // Disable MCP tools for AI chat - they cause schema compatibility issues
@@ -903,7 +975,9 @@ const App: React.FC = () => {
         }
       } else {
         // Text/note/sticky generation
-        const fullPrompt = `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`;
+        const fullPrompt = contextText
+          ? `Context: "${contextText}"\n\nUser request: ${prompt}\n\nRespond in HTML format with proper paragraph tags.`
+          : `${prompt}\n\nRespond in HTML format with proper paragraph tags.`;
         await generateTextStream(fullPrompt, updateContent, { systemPrompt: AI_FORMAT_SYSTEM_PROMPT, provider: selectedProvider });
       }
 
@@ -1219,6 +1293,47 @@ const App: React.FC = () => {
       });
     };
 
+    // Measure note content and calculate optimal grid size
+    const measureNoteContent = (item: SpatialItem): { gridCellsX: number; gridCellsY: number } => {
+      if (item.type !== 'note') {
+        return {
+          gridCellsX: item.metadata?.gridCellsX || 1,
+          gridCellsY: item.metadata?.gridCellsY || 1
+        };
+      }
+
+      // Create temporary element to measure content
+      const temp = document.createElement('div');
+      try {
+        temp.style.position = 'absolute';
+        temp.style.visibility = 'hidden';
+        temp.style.width = '600px'; // Max width for measurement
+        temp.style.padding = '16px';
+        temp.style.fontSize = '16px';
+        temp.style.lineHeight = '1.6';
+        temp.innerHTML = item.content;
+        document.body.appendChild(temp);
+
+        const contentHeight = temp.scrollHeight;
+
+        // Convert to grid cells (220px per cell + 40px gap)
+        const GRID_CELL_SIZE = 220;
+        const GRID_GAP = 40;
+        const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
+
+        // Calculate cells needed (min 1, max 10 width, max 8 height)
+        const gridCellsX = Math.min(10, Math.max(1, Math.ceil((600 + GRID_GAP) / SLOT_SIZE)));
+        const gridCellsY = Math.min(8, Math.max(1, Math.ceil((contentHeight + GRID_GAP) / SLOT_SIZE)));
+
+        return { gridCellsX, gridCellsY };
+      } finally {
+        // Ensure cleanup even if error occurs
+        if (temp.parentNode) {
+          document.body.removeChild(temp);
+        }
+      }
+    };
+
     const arrangeGrid = (items: SpatialItem[], sortBy: SortOption): SpatialItem[] => {
       if (items.length === 0) return items;
       const sorted = sortItems(items, sortBy);
@@ -1232,9 +1347,8 @@ const App: React.FC = () => {
       let maxRowHeight = 0;
 
       const arranged = sorted.map((item) => {
-        // Use stored grid dimensions or default to 1x1
-        const gridW = item.metadata?.gridCellsX || 1;
-        const gridH = item.metadata?.gridCellsY || 1;
+        // Measure content for notes, use stored dimensions for others
+        const { gridCellsX: gridW, gridCellsY: gridH } = measureNoteContent(item);
 
         const w = gridW * SLOT_SIZE - GRID_GAP;
         const h = gridH * SLOT_SIZE - GRID_GAP;
@@ -1252,7 +1366,19 @@ const App: React.FC = () => {
           maxRowHeight = 0;
         }
 
-        return { ...item, x, y, w, h, rotation: 0 };
+        return {
+          ...item,
+          x,
+          y,
+          w,
+          h,
+          rotation: 0,
+          metadata: {
+            ...item.metadata,
+            gridCellsX: gridW,
+            gridCellsY: gridH
+          }
+        };
       });
 
       // Center the grid - snap offset to grid boundaries
@@ -1276,12 +1402,13 @@ const App: React.FC = () => {
       const sorted = sortItems(items, sortBy);
       const GAP = 20;
       const SMALL = 180;
-      const LARGE_W = 400; // Wider
-      const LARGE_H = 280; // Less tall - prefer landscape
+      const LARGE_W = 400;
+      const LARGE_H = 280;
       const COLS = 3;
       const colHeights = new Array(COLS).fill(0);
       const arranged = sorted.map((item, index) => {
-        // Use stored grid dimensions to determine if item should be large
+        // Measure content for notes
+        const { gridCellsX, gridCellsY } = measureNoteContent(item);
         const hasCustomSize = item.metadata?.gridCellsX || item.metadata?.gridCellsY;
         const isLarge = hasCustomSize || index % 4 === 0;
 
@@ -1293,7 +1420,19 @@ const App: React.FC = () => {
         const x = -((COLS * SMALL + (COLS - 1) * GAP) / 2) + col * (SMALL + GAP);
         const y = colHeights[col];
         colHeights[col] += h + GAP;
-        return { ...item, x, y, w, h, rotation: 0 };
+        return {
+          ...item,
+          x,
+          y,
+          w,
+          h,
+          rotation: 0,
+          metadata: {
+            ...item.metadata,
+            gridCellsX,
+            gridCellsY
+          }
+        };
       });
       const maxHeight = Math.max(...colHeights);
       return arranged.map(item => ({ ...item, y: item.y - maxHeight / 2 }));
@@ -1311,15 +1450,26 @@ const App: React.FC = () => {
         return seed / 233280;
       };
       return sorted.map((item) => {
+        // Measure content for notes to get proper dimensions
+        const { gridCellsX, gridCellsY } = measureNoteContent(item);
+        const GRID_CELL_SIZE = 220;
+        const GRID_GAP = 40;
+        const SLOT_SIZE = GRID_CELL_SIZE + GRID_GAP;
+
         const angle = seededRandom() * Math.PI * 2;
         const distance = seededRandom() * SPREAD;
         return {
           ...item,
           x: Math.cos(angle) * distance,
           y: Math.sin(angle) * distance,
-          w: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
-          h: SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+          w: item.type === 'note' ? gridCellsX * SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
+          h: item.type === 'note' ? gridCellsY * SLOT_SIZE - GRID_GAP : SIZE_MIN + seededRandom() * (SIZE_MAX - SIZE_MIN),
           rotation: (seededRandom() - 0.5) * 10,
+          metadata: {
+            ...item.metadata,
+            gridCellsX,
+            gridCellsY
+          }
         };
       });
     };
@@ -1451,7 +1601,7 @@ const App: React.FC = () => {
   const currentTheme = themeColors[theme] || themeColors.light;
 
   // Shader selection
-  const selectedShader = localStorage.getItem('background-shader') || 'paper-texture';
+  const selectedShader = localStorage.getItem('background-shader') || 'neuro-noise';
 
   const renderShader = () => {
     const shaderStyle = { width: '100%', height: '100%' };
@@ -1672,6 +1822,14 @@ const App: React.FC = () => {
                 setAIPromptState(null);
                 setHighlightedNodeId(null);
               } : undefined}
+              onBlankCanvasDoubleClick={(position) => {
+                // Open AI chat on empty canvas double-click
+                setAIPromptState({
+                  itemIds: new Set(),
+                  position,
+                  mode: 'selection'
+                });
+              }}
               onOpenMedia={(item, rect) => {
                 setMediaViewerRect(rect);
                 setMediaViewerItem(item);
@@ -1711,6 +1869,7 @@ const App: React.FC = () => {
                   }
                 }));
               }}
+              contextTip={contextTip}
           />
         </div>
       )}
@@ -1759,35 +1918,11 @@ const App: React.FC = () => {
       {/* Space Navigation + Actions - Bottom Right */}
       {!showOverview && (
         <div className="absolute right-8 flex items-center gap-3 z-50" style={{ bottom: 18 }}>
-          {/* New Space Button */}
-          <button
-            className="bg-white/40 backdrop-blur-md p-3.5 rounded-2xl hover:bg-white/50 text-gray-800 transition-all shadow-lg hover:scale-105 active:scale-95 border border-white/60"
-            onClick={() => {
-              const newSpaceId = `space-${Date.now()}`;
-              setSpaces(prev => ({
-                ...prev,
-                [newSpaceId]: {
-                  id: newSpaceId,
-                  name: 'New Space',
-                  parentId: null,
-                  items: [],
-                  connections: [],
-                  camera: { x: 0, y: 0, zoom: 1 }
-                }
-              }));
-              setActiveSpaceId(newSpaceId);
-              setSelection(new Set());
-            }}
-            title="New Space"
-          >
-            <SquarePlus size={20} />
-          </button>
-
-          {/* Space Indicator */}
-          {topLevelSpaces.length > 1 && (
-            <div className="bg-white/40 backdrop-blur-md rounded-full px-2 py-1.5 shadow-lg border border-white/60">
-              <div className="flex items-center gap-2">
-                {/* Previous button */}
+          {/* Space Indicator - Always visible */}
+          <div className="bg-white/40 backdrop-blur-md rounded-full px-1.5 py-1 shadow-lg border border-white/60">
+            <div className="flex items-center gap-1.5">
+              {/* Previous button (hidden if single space) */}
+              {topLevelSpaces.length > 1 && (
                 <button
                   onClick={() => {
                     const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
@@ -1798,19 +1933,21 @@ const App: React.FC = () => {
                     }
                   }}
                   disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0}
-                  className={`p-2 rounded-full transition-all ${
+                  className={`p-1.5 rounded-full transition-all ${
                     topLevelSpaces.findIndex(s => s.id === activeSpaceId) === 0
                       ? 'opacity-0 cursor-not-allowed'
                       : 'hover:bg-gray-800/10 text-gray-800 shadow-lg'
                   }`}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="15 18 9 12 15 6"></polyline>
                   </svg>
                 </button>
+              )}
 
-                {/* Space dots */}
-                <div className="flex items-center gap-1.5 px-2">
+              {/* Space dots (only if multiple spaces) */}
+              {topLevelSpaces.length > 1 && (
+                <div className="flex items-center gap-1 px-1.5">
                   {topLevelSpaces.map((space) => (
                     <button
                       key={space.id}
@@ -1820,38 +1957,67 @@ const App: React.FC = () => {
                       }}
                       className={`transition-all duration-300 rounded-full ${
                         space.id === activeSpaceId
-                          ? 'w-6 h-1.5 bg-gray-800'
-                          : 'w-1.5 h-1.5 bg-gray-600/50 hover:bg-gray-700/70'
+                          ? 'w-5 h-1 bg-gray-800'
+                          : 'w-1 h-1 bg-gray-600/50 hover:bg-gray-700/70'
                       }`}
                       title={space.name}
                     />
                   ))}
                 </div>
+              )}
 
-                {/* Next button */}
-                <button
-                  onClick={() => {
-                    const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
-                    if (currentIndex < topLevelSpaces.length - 1) {
+              {/* Next button OR Add Space button */}
+              {(() => {
+                const currentIndex = topLevelSpaces.findIndex(s => s.id === activeSpaceId);
+                const isLastSpace = topLevelSpaces.length > 1 && currentIndex === topLevelSpaces.length - 1;
+                const canPageForward = topLevelSpaces.length > 1 && currentIndex < topLevelSpaces.length - 1;
+
+                if (isLastSpace || topLevelSpaces.length === 1) {
+                  // Show + button when at last space or single space
+                  return (
+                    <button
+                      onClick={() => {
+                        const newSpaceId = `space-${Date.now()}`;
+                        setSpaces(prev => ({
+                          ...prev,
+                          [newSpaceId]: {
+                            id: newSpaceId,
+                            name: 'New Space',
+                            parentId: null,
+                            items: [],
+                            connections: [],
+                            camera: { x: 0, y: 0, zoom: 1 }
+                          }
+                        }));
+                        setActiveSpaceId(newSpaceId);
+                        setSelection(new Set());
+                      }}
+                      className="p-1.5 rounded-full hover:bg-gray-800/10 text-gray-800 transition-all shadow-lg"
+                      title="New Space"
+                    >
+                      <SquarePlus size={16} />
+                    </button>
+                  );
+                }
+
+                // Show > arrow if can page forward
+                return (
+                  <button
+                    onClick={() => {
                       const nextSpace = topLevelSpaces[currentIndex + 1];
                       setActiveSpaceId(nextSpace.id);
                       setSelection(new Set());
-                    }
-                  }}
-                  disabled={topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1}
-                  className={`p-2 rounded-full transition-all ${
-                    topLevelSpaces.findIndex(s => s.id === activeSpaceId) === topLevelSpaces.length - 1
-                      ? 'opacity-0 cursor-not-allowed'
-                      : 'hover:bg-gray-800/10 text-gray-800 shadow-lg'
-                  }`}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </button>
-              </div>
+                    }}
+                    className="p-1.5 rounded-full hover:bg-gray-800/10 text-gray-800 transition-all shadow-lg"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </button>
+                );
+              })()}
             </div>
-          )}
+          </div>
 
           {/* Add Button with Menu */}
           <div className="relative">
@@ -2000,7 +2166,7 @@ const App: React.FC = () => {
             )}
 
             <button
-              className={`bg-white/40 backdrop-blur-md border border-white/60 text-gray-800 p-3.5 rounded-full hover:bg-white/50 transition-all shadow-lg hover:scale-105 active:scale-95 ${showAddMenu || quickGenerateMode ? 'rotate-45' : ''}`}
+              className={`bg-white/40 backdrop-blur-md border border-white/60 text-gray-800 p-2.5 rounded-full hover:bg-white/50 transition-all shadow-lg hover:scale-105 active:scale-95 ${showAddMenu || quickGenerateMode ? 'rotate-45' : ''}`}
               onClick={() => {
                 if (quickGenerateMode) {
                   setQuickGenerateMode(null);
@@ -2009,7 +2175,7 @@ const App: React.FC = () => {
                 }
               }}
             >
-              {showAddMenu || quickGenerateMode ? <X size={22} /> : <Plus size={22} />}
+              {showAddMenu || quickGenerateMode ? <X size={18} /> : <Plus size={18} />}
             </button>
           </div>
         </div>
@@ -2091,7 +2257,14 @@ const App: React.FC = () => {
                   console.log('[App] All selected items are images, forcing image mode');
                   options = { ...options, outputType: 'image' };
                 }
-                handleAIGeneration(Array.from(aiPromptState.itemIds!), prompt, options);
+                handleAIGeneration(
+                  Array.from(aiPromptState.itemIds!),
+                  prompt,
+                  options,
+                  undefined,
+                  undefined,
+                  aiPromptState.itemIds.size === 0 ? aiPromptState.position : undefined
+                );
                 setAIPromptState(null);
               }}
               onClose={() => setAIPromptState(null)}

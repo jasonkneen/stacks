@@ -114,14 +114,16 @@ export const ContextToolbar: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Auto-Arrange Selection */}
-        <button
-          onClick={() => onArrangeSelection(layoutType, sortBy)}
-          className={btnClass}
-          title="Auto-arrange selected items"
-        >
-          <LayoutGrid size={20} />
-        </button>
+        {/* Auto-Arrange Selection (2+ items only) */}
+        {selection.size >= 2 && (
+          <button
+            onClick={() => onArrangeSelection(layoutType, sortBy)}
+            className={btnClass}
+            title="Auto-arrange selected items"
+          >
+            <LayoutGrid size={20} />
+          </button>
+        )}
 
         {/* Regenerate (AI-generated items only) */}
         {hasPrompt && (

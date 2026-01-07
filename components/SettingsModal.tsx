@@ -16,7 +16,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [autoArrangeNew, setAutoArrangeNew] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [selectedTheme, setSelectedTheme] = useState(localStorage.getItem('theme') || 'dark');
 
   const [anthropicKey, setAnthropicKey] = useState(localStorage.getItem('anthropic-api-key') || '');
   const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai-api-key') || '');
@@ -241,30 +241,34 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-2">
                     Text Generation
                   </label>
-                  <select className={inputClass}>
+                  <select
+                    className={inputClass}
+                    value={localStorage.getItem('text-model') || 'gemini-2.5-flash'}
+                    onChange={(e) => localStorage.setItem('text-model', e.target.value)}
+                  >
                     <optgroup label="Anthropic Claude">
-                      <option>claude-opus-4-5-20251101</option>
-                      <option>claude-sonnet-4-5-20250929</option>
-                      <option>claude-haiku-4-5-20251015</option>
-                      <option>claude-opus-4-1-20250805</option>
+                      <option value="claude-opus-4-5-20251101">claude-opus-4-5-20251101</option>
+                      <option value="claude-sonnet-4-5-20250929">claude-sonnet-4-5-20250929</option>
+                      <option value="claude-haiku-4-5-20251015">claude-haiku-4-5-20251015</option>
+                      <option value="claude-opus-4-1-20250805">claude-opus-4-1-20250805</option>
                     </optgroup>
                     <optgroup label="OpenAI GPT">
-                      <option>gpt-5.2</option>
-                      <option>gpt-5.2-thinking</option>
-                      <option>gpt-5.2-pro</option>
-                      <option>gpt-5-mini</option>
-                      <option>gpt-4.1</option>
-                      <option>gpt-4.1-mini</option>
-                      <option>o3</option>
-                      <option>o3-mini</option>
+                      <option value="gpt-5.2">gpt-5.2</option>
+                      <option value="gpt-5.2-thinking">gpt-5.2-thinking</option>
+                      <option value="gpt-5.2-pro">gpt-5.2-pro</option>
+                      <option value="gpt-5-mini">gpt-5-mini</option>
+                      <option value="gpt-4.1">gpt-4.1</option>
+                      <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                      <option value="o3">o3</option>
+                      <option value="o3-mini">o3-mini</option>
                     </optgroup>
                     <optgroup label="Google Gemini">
-                      <option>gemini-3-pro</option>
-                      <option>gemini-3-flash</option>
-                      <option>gemini-2.5-pro</option>
-                      <option>gemini-2.5-flash</option>
-                      <option>gemini-2.5-flash-lite</option>
-                      <option>gemini-2.0-flash-exp</option>
+                      <option value="gemini-3-pro">gemini-3-pro</option>
+                      <option value="gemini-3-flash">gemini-3-flash</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                      <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
                     </optgroup>
                   </select>
                 </div>
@@ -273,15 +277,19 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-2">
                     Image Analysis
                   </label>
-                  <select className={inputClass}>
+                  <select
+                    className={inputClass}
+                    value={localStorage.getItem('image-analysis-model') || 'gemini-3-flash'}
+                    onChange={(e) => localStorage.setItem('image-analysis-model', e.target.value)}
+                  >
                     <optgroup label="Anthropic Claude">
-                      <option>claude-opus-4-5-20251101</option>
-                      <option>claude-sonnet-4-5-20250929</option>
+                      <option value="claude-opus-4-5-20251101">claude-opus-4-5-20251101</option>
+                      <option value="claude-sonnet-4-5-20250929">claude-sonnet-4-5-20250929</option>
                     </optgroup>
                     <optgroup label="Google Gemini">
-                      <option selected>gemini-3-flash</option>
-                      <option>gemini-3-pro</option>
-                      <option>gemini-2.5-pro</option>
+                      <option value="gemini-3-flash">gemini-3-flash</option>
+                      <option value="gemini-3-pro">gemini-3-pro</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro</option>
                     </optgroup>
                   </select>
                 </div>
@@ -290,13 +298,17 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-2">
                     Image Generation
                   </label>
-                  <select className={inputClass}>
+                  <select
+                    className={inputClass}
+                    value={localStorage.getItem('image-generation-model') || 'gemini-3-pro-image-preview'}
+                    onChange={(e) => localStorage.setItem('image-generation-model', e.target.value)}
+                  >
                     <optgroup label="Google Gemini">
-                      <option selected>gemini-2.5-flash-image (Nano Banana)</option>
-                      <option>gemini-3-pro-image-preview (Nano Banana Pro)</option>
+                      <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Nano Banana)</option>
+                      <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview (Nano Banana Pro)</option>
                     </optgroup>
                     <optgroup label="OpenAI">
-                      <option>gpt-image-1.5</option>
+                      <option value="gpt-image-1.5">gpt-image-1.5</option>
                     </optgroup>
                   </select>
                 </div>
@@ -362,7 +374,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onThemeChange }) => {
                   </label>
                   <select
                     className={inputClass}
-                    value={localStorage.getItem('background-shader') || 'paper-texture'}
+                    value={localStorage.getItem('background-shader') || 'neuro-noise'}
                     onChange={(e) => {
                       localStorage.setItem('background-shader', e.target.value);
                       window.location.reload(); // Reload to apply shader

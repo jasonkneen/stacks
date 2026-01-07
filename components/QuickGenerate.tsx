@@ -63,9 +63,10 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
       if (mode === 'image') {
         setStatus('Generating image...');
         const ai = await getClient();
+        const model = localStorage.getItem('image-generation-model') || 'gemini-2.5-flash-image';
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-exp-image-generation',
+          model,
           contents: {
             parts: [{ text: prompt }],
           },
@@ -189,8 +190,9 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ initialMode, onClo
 
         try {
           const ai = await getClient();
+          const model = localStorage.getItem('text-model') || 'gemini-2.0-flash-exp';
           const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model,
             contents: {
               parts: [
                 { inlineData: { mimeType: 'audio/mp3', data: base64Audio } },

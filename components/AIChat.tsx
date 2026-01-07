@@ -84,11 +84,12 @@ export const parseAIResponse = (rawResponse: string): AIResponse[] => {
     });
   }
 
-  // Extract all NOTE tags
-  const noteMatches = rawResponse.match(/\[NOTE:[^\]]+\][\s\S]*?\[\/NOTE\]/g);
+  // Extract all NOTE tags (with or without closing tag)
+  const noteMatches = rawResponse.match(/\[NOTE:[^\]]+\][\s\S]*?(?:\[\/NOTE\]|$)/g);
   if (noteMatches) {
     noteMatches.forEach(match => {
-      const titleMatch = match.match(/\[NOTE:([^\]]+)\]([\s\S]*?)\[\/NOTE\]/);
+      // Match with optional closing tag
+      const titleMatch = match.match(/\[NOTE:([^\]]+)\]([\s\S]*?)(?:\[\/NOTE\]|$)/);
       if (titleMatch) {
         responses.push({
           format: 'note',

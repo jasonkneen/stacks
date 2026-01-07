@@ -3,7 +3,7 @@
  * MCP Proxy Server
  *
  * Bridges browser WebSocket connections to stdio MCP servers.
- * Allows the Spatial Canvas app to consume external MCP servers.
+ * Allows the Stacks app to consume external MCP servers.
  */
 
 import { WebSocketServer, WebSocket } from "ws";

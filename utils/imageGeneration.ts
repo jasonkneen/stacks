@@ -33,6 +33,7 @@ const generateImageOpenAI = async (
     throw new Error('OpenAI API key not configured. Please add your API key in Settings → Providers.');
   }
 
+  const model = localStorage.getItem('image-generation-model') || 'gpt-image-1.5';
   const [width, height] = (options?.resolution || '1024x1024').split('x').map(Number);
 
   const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -42,7 +43,7 @@ const generateImageOpenAI = async (
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-image-1.5',
+      model,
       prompt,
       n: 1,
       size: options?.resolution || '1024x1024',
@@ -71,8 +72,8 @@ const generateImageGemini = async (
     throw new Error('Google AI API key not configured. Please add your API key in Settings → Providers.');
   }
 
-  // gemini-2.5-flash-image (Nano Banana) or gemini-3-pro-image-preview (Nano Banana Pro)
-  const model = 'gemini-2.5-flash-image';
+  // Get model from settings
+  const model = localStorage.getItem('image-generation-model') || 'gemini-2.5-flash-image';
 
   // Map resolution to aspectRatio and imageSize
   let aspectRatio = '1:1';

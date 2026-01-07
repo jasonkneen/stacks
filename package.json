@@ -1,13 +1,13 @@
 {
   "name": "stacks-ai",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Stacks - AI-powered infinite canvas for notes, images, and creative organization",
   "author": "Jason Kneen",
   "license": "MIT",
   "type": "module",
   "main": "electron/main.cjs",
   "bin": {
-    "stacks": "bin/stacks.cjs"
+    "stacks-ai": "bin/stacks.cjs"
   },
   "files": [
     "bin/",
@@ -16,6 +16,7 @@
     "dist/index.html",
     "dist/mcp/*.js",
     "electron/",
+    "assets/icon.icns",
     "README.md"
   ],
   "scripts": {
@@ -72,14 +73,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jasonkneen/spatial.git"
+    "url": "git+https://github.com/jasonkneen/stacks.git"
   },
   "keywords": [
-    "spatial",
+    "stacks",
     "canvas",
     "notes",
     "ai",
     "workspace",
-    "electron"
+    "electron",
+    "infinite-canvas"
   ]
 }

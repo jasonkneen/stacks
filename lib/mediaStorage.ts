@@ -6,7 +6,7 @@
  * - No size limits (browser-managed quota)
  */
 
-const DB_NAME = 'spatial-media-db';
+const DB_NAME = 'stacks-media-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'media';
 

@@ -113,14 +113,14 @@ export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote
 
       {/* Editor Content */}
       <div
-        className="w-full h-full overflow-y-auto"
+        className="w-full h-full overflow-y-auto rounded-3xl"
         // Stop propagation ONLY when editing to allow dragging when not editing.
         onMouseDown={(e) => isEditing && e.stopPropagation()}
         onDoubleClick={() => setIsEditing(true)}
       >
         <div
             ref={contentRef}
-            className={`w-full min-h-full p-6 outline-none text-gray-800 text-base leading-relaxed transition-all ease-out ${isEditing ? 'pt-16 cursor-text' : 'cursor-default pointer-events-none'}`}
+            className={`w-full min-h-full px-6 pt-8 pb-8 outline-none text-gray-800 text-base leading-relaxed transition-all ease-out ${isEditing ? 'pt-16 cursor-text' : 'cursor-default pointer-events-none'}`}
             contentEditable={isEditing}
             onBlur={() => setIsEditing(false)}
             onInput={handleInput}

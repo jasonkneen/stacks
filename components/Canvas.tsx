@@ -26,7 +26,9 @@ interface CanvasProps {
   highlightedNodeId?: string | null; // For showing target node highlight
   onNodeClick?: (itemId: string) => void; // For changing AI target destination
   onBlankCanvasClick?: () => void; // For clearing AI prompt
+  onBlankCanvasDoubleClick?: (position: { x: number; y: number }) => void; // For opening AI chat on empty canvas
   layoutType?: LayoutType; // Current layout mode - disables grid for 'random' and 'free'
+  contextTip?: string; // Contextual tip to show in bottom-left
 }
 
 // Sort items by the given option
@@ -218,7 +220,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   highlightedNodeId,
   onNodeClick,
   onBlankCanvasClick,
+  onBlankCanvasDoubleClick,
   layoutType = 'grid',
+  contextTip,
 }) => {
   // Disable grid snapping for random and free layouts
   const enableGridSnap = layoutType === 'grid' || layoutType === 'bento';
@@ -256,7 +260,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   const currentDragOffsetRef = useRef({ x: 0, y: 0 }); // Current offset
   const [dragOffsetTrigger, setDragOffsetTrigger] = useState(0); // Trigger re-render
   const [resizingId, setResizingId] = useState<string | null>(null);
-  const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number } | null>(null);
+  const resizeStartRef = useRef<{ w: number; h: number; mouseX: number; mouseY: number; gridX: number; gridY: number; rotation: number; itemX: number; itemY: number } | null>(null);
+  const resizeDimensionsRef = useRef<{ w: number; h: number; gridCellsX: number; gridCellsY: number; rotation: number } | null>(null);
+  const [resizeTrigger, setResizeTrigger] = useState(0);
   
   // Panning & Selection Modes
   const [isPanning, setIsPanning] = useState(false);
@@ -540,7 +546,10 @@ export const Canvas: React.FC<CanvasProps> = ({
           mouseX: e.clientX,
           mouseY: e.clientY,
           gridX: Math.max(1, gridX),
-          gridY: Math.max(1, gridY)
+          gridY: Math.max(1, gridY),
+          rotation: item.rotation,
+          itemX: item.x,
+          itemY: item.y
       };
   };
 
@@ -554,7 +563,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const worldPos = screenToWorld(e.clientX, e.clientY);
 
-    // Handle resize - FREE resize with magnetic snap
+    // Handle resize - FREE resize with magnetic snap + rotation
     if (resizingId && resizeStartRef.current) {
         const startData = resizeStartRef.current;
         const deltaMouseX = e.clientX - startData.mouseX;
@@ -590,23 +599,32 @@ export const Canvas: React.FC<CanvasProps> = ({
           }
         }
 
-        // Update item with dimensions
-        onUpdateItems(currentItems =>
-            currentItems.map(item =>
-                item.id === resizingId
-                  ? {
-                      ...item,
-                      w: newW,
-                      h: newH,
-                      metadata: {
-                        ...item.metadata,
-                        gridCellsX,
-                        gridCellsY
-                      }
-                    }
-                  : item
-            )
-        );
+        // Calculate rotation from top-left corner (world space)
+        const mouseWorldX = worldPos.x;
+        const mouseWorldY = worldPos.y;
+        const topLeftX = startData.itemX;
+        const topLeftY = startData.itemY;
+
+        // Angle from top-left to mouse position
+        const dx = mouseWorldX - topLeftX;
+        const dy = mouseWorldY - topLeftY;
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = (angleRad * 180 / Math.PI) - 45; // -45 to align with SE resize handle
+
+        // Clamp rotation to reasonable range
+        const newRotation = Math.max(-15, Math.min(15, angleDeg * 0.3));
+
+        // Store dimensions + rotation locally, don't trigger parent update during resize
+        resizeDimensionsRef.current = { w: newW, h: newH, gridCellsX, gridCellsY, rotation: newRotation };
+
+        // Throttle visual updates with RAF to prevent jank
+        if (!animationFrameRef.current) {
+          animationFrameRef.current = requestAnimationFrame(() => {
+            setResizeTrigger(prev => prev + 1);
+            animationFrameRef.current = 0;
+          });
+        }
+
         return;
     }
 
@@ -692,8 +710,29 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [isPanning, draggingId, resizingId, selectionBox, camera.zoom, items, selection, onUpdateItems, screenToWorld, dragStartPos, onSelectionChange, connectingLine]);
 
   const handleMouseUp = useCallback(() => {
-    // Clear resize state (already snapped during resize if close)
-    if (resizingId) {
+    // Clear resize state and persist final dimensions + rotation
+    if (resizingId && resizeDimensionsRef.current) {
+        const { w, h, gridCellsX, gridCellsY, rotation } = resizeDimensionsRef.current;
+
+        // Persist resize + rotation to parent state NOW (on mouseup only)
+        onUpdateItems(currentItems =>
+            currentItems.map(item =>
+                item.id === resizingId
+                  ? {
+                      ...item,
+                      w,
+                      h,
+                      rotation,
+                      metadata: {
+                        ...item.metadata,
+                        gridCellsX,
+                        gridCellsY
+                      }
+                    }
+                  : item
+            )
+        );
+
         const resizedItem = items.find(i => i.id === resizingId);
 
         if (resizedItem && onAutoArrange) {
@@ -727,6 +766,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         setResizingId(null);
         resizeStartRef.current = null;
+        resizeDimensionsRef.current = null;
         return;
     }
 
@@ -748,15 +788,39 @@ export const Canvas: React.FC<CanvasProps> = ({
         // Drag left → settle tilted left (negative rotation)
         const settleTilt = dragTiltRef.current * 0.5;
 
+        const SNAP_TOLERANCE = 40;
+
         // Apply final positions and settle rotation based on drag direction
         onUpdateItems(currentItems =>
             currentItems.map(item => {
                 const startPos = itemPositions.get(item.id);
                 if (startPos) {
+                    const finalX = startPos.x + finalOffset.x;
+                    const finalY = startPos.y + finalOffset.y;
+
+                    // Check if close to grid snap point (only if grid snap enabled)
+                    if (enableGridSnap) {
+                      const nearestGridX = Math.round(finalX / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+                      const nearestGridY = Math.round(finalY / GRID_SLOT_SIZE) * GRID_SLOT_SIZE;
+                      const distX = Math.abs(finalX - nearestGridX);
+                      const distY = Math.abs(finalY - nearestGridY);
+
+                      // If dropped within snap tolerance, snap to grid and remove rotation
+                      if (distX <= SNAP_TOLERANCE && distY <= SNAP_TOLERANCE) {
+                        return {
+                          ...item,
+                          x: nearestGridX,
+                          y: nearestGridY,
+                          rotation: 0 // Aligned to grid = no rotation
+                        };
+                      }
+                    }
+
+                    // Dropped away from grid = keep jaunty rotation
                     return {
                         ...item,
-                        x: startPos.x + finalOffset.x,
-                        y: startPos.y + finalOffset.y,
+                        x: finalX,
+                        y: finalY,
                         rotation: item.rotation + settleTilt
                     };
                 }
@@ -855,12 +919,22 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [screenToWorld, onDropFiles]);
 
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
+    // Only trigger if clicking on canvas background (not on items)
+    if (e.target === canvasRef.current || (e.target as HTMLElement).id === 'canvas-bg') {
+      if (onBlankCanvasDoubleClick) {
+        onBlankCanvasDoubleClick({ x: e.clientX, y: e.clientY });
+      }
+    }
+  }, [onBlankCanvasDoubleClick]);
+
   return (
     <div
       ref={canvasRef}
       id="canvas-bg"
       className={`w-full h-full relative overflow-hidden transition-colors duration-200 ${isDragOver ? 'bg-blue-50' : ''}`}
       onMouseDown={handleMouseDown}
+      onDoubleClick={handleCanvasDoubleClick}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1011,7 +1085,18 @@ export const Canvas: React.FC<CanvasProps> = ({
           // Once mouseUp fires, draggingId becomes null - use committed positions
           const isDragged = draggingId && dragStartDataRef.current?.itemPositions.has(item.id);
           const offset = currentDragOffsetRef.current;
-          const visualItem = isDragged ? { ...item, x: item.x + offset.x, y: item.y + offset.y } : item;
+          let visualItem = isDragged ? { ...item, x: item.x + offset.x, y: item.y + offset.y } : item;
+
+          // Apply visual resize dimensions + rotation during resize (before persistence)
+          const isResized = resizingId === item.id && resizeDimensionsRef.current;
+          if (isResized) {
+            visualItem = {
+              ...visualItem,
+              w: resizeDimensionsRef.current!.w,
+              h: resizeDimensionsRef.current!.h,
+              rotation: resizeDimensionsRef.current!.rotation
+            };
+          }
 
           return (
             <ItemRenderer
@@ -1057,9 +1142,9 @@ export const Canvas: React.FC<CanvasProps> = ({
         )}
       </div>
       
-      {/* Hint for Space Panning (Fade out logic could be added) */}
-      <div className="absolute bottom-8 left-8 text-gray-400 text-xs pointer-events-none select-none">
-          Space + Drag to pan
+      {/* Contextual Tip (bottom-left) */}
+      <div className="absolute bottom-8 left-8 text-gray-400 text-xs pointer-events-none select-none transition-opacity duration-300">
+          {contextTip || 'Space + Drag to pan'}
       </div>
 
       {/* Drop Zone Indicator */}

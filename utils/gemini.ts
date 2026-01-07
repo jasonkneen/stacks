@@ -95,8 +95,9 @@ export const generateTextStream = async (prompt: string, onChunk: (text: string)
     initGemini(key);
   }
 
+  const model = localStorage.getItem('text-model') || 'gemini-2.0-flash-exp';
   const response = await genAI!.models.generateContentStream({
-    model: 'gemini-2.0-flash-exp',
+    model,
     contents: prompt
   });
 
@@ -148,9 +149,10 @@ export const generateWithTools = async (
   }
 
   // Tool calling loop
+  const model = localStorage.getItem('text-model') || 'gemini-2.0-flash-exp';
   while (toolCallCount < maxToolCalls) {
     const response = await genAI!.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model,
       contents,
       config: {
         tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
@@ -263,8 +265,9 @@ export const analyzeImageWithGemini = async (imageUrl: string): Promise<{ descri
   const blob = await response.blob();
   const base64 = await blobToBase64(blob);
 
+  const model = localStorage.getItem('image-analysis-model') || 'gemini-3-flash';
   const result = await genAI!.models.generateContent({
-    model: 'gemini-3-flash',
+    model,
     contents: [
       {
         parts: [

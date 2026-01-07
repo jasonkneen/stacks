@@ -75,16 +75,18 @@ export const getLanguageModel = (config: ProviderConfig): LanguageModel => {
     throw new Error(`${config.provider} API key not configured. Please add your API key in Settings → Providers.`);
   }
 
+  const savedModel = localStorage.getItem('text-model');
+
   switch (config.provider) {
     case 'anthropic':
-      return anthropic(config.model || 'claude-sonnet-4-5-20250929', { apiKey });
+      return anthropic(config.model || savedModel || 'claude-sonnet-4-5-20250929', { apiKey });
 
     case 'openai':
-      return openai(config.model || 'gpt-4o', { apiKey });
+      return openai(config.model || savedModel || 'gpt-4o', { apiKey });
 
     case 'google': {
       const googleProvider = createGoogleGenerativeAI({ apiKey });
-      return googleProvider(config.model || 'gemini-2.0-flash-exp');
+      return googleProvider(config.model || savedModel || 'gemini-2.0-flash-exp');
     }
 
     default:

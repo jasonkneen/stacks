@@ -1,6 +1,6 @@
 {
-  "name": "Spatial (Alpha)",
-  "description": "A local-first, macOS-native spatial organization tool designed as an open air space for thinking, collecting, and remembering.",
+  "name": "Stacks",
+  "description": "AI-powered infinite canvas for notes, images, and creative organization.",
   "requestFramePermissions": [
     "microphone"
   ]

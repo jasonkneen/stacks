@@ -68,17 +68,18 @@ export const analyzeImageWithVision = async (
   const { data, mimeType } = await imageUrlToBase64(imageUrl);
 
   // Select model based on provider
+  const savedModel = localStorage.getItem('image-analysis-model');
   let model;
   switch (provider) {
     case 'anthropic':
-      model = anthropic(options?.model || 'claude-sonnet-4-5-20250929', { apiKey });
+      model = anthropic(options?.model || savedModel || 'claude-sonnet-4-5-20250929', { apiKey });
       break;
     case 'openai':
-      model = openai(options?.model || 'gpt-4o', { apiKey });
+      model = openai(options?.model || savedModel || 'gpt-4o', { apiKey });
       break;
     case 'google': {
       const googleProvider = createGoogleGenerativeAI({ apiKey });
-      model = googleProvider(options?.model || 'gemini-2.0-flash-exp');
+      model = googleProvider(options?.model || savedModel || 'gemini-2.0-flash-exp');
       break;
     }
     default:

@@ -41,7 +41,7 @@ interface Space {
 }
 
 // Database setup
-const dataDir = join(homedir(), ".spatial");
+const dataDir = join(homedir(), ".stacks");
 if (!existsSync(dataDir)) {
   mkdirSync(dataDir, { recursive: true });
 }
@@ -106,7 +106,7 @@ const generateId = (prefix: string = "item"): string => {
 
 // Create MCP Server
 const server = new McpServer({
-  name: "spatial-canvas",
+  name: "stacks-canvas",
   version: "1.0.0",
 });
 
@@ -737,7 +737,7 @@ You can use the move_item or organize_items tools to implement your suggestions.
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Spatial Canvas MCP Server v1.0.0 running on stdio");
+  console.error("Stacks Canvas MCP Server v1.0.0 running on stdio");
   console.error(`Database: ${join(dataDir, "canvas.db")}`);
 }
 

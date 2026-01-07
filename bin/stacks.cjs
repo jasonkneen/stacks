@@ -192,9 +192,9 @@ if (args.includes('--help') || args.includes('-h')) {
 Stacks - AI-powered infinite canvas
 
 Usage:
-  npx stacks          Launch the app
-  npx stacks --clean  Clear cached Electron installation
-  npx stacks --help   Show this help message
+  npx stacks-ai          Launch the app
+  npx stacks-ai --clean  Clear cached Electron installation
+  npx stacks-ai --help   Show this help message
 
 Cache location: ${CACHE_DIR}
 `)

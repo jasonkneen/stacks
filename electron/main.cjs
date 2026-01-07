@@ -4,6 +4,9 @@ const path = require('path')
 const net = require('net')
 const fs = require('fs')
 
+// Set app name for macOS menu
+app.name = 'Stacks'
+
 const isDev = process.env.NODE_ENV === 'development'
 
 let mainWindow = null
@@ -114,6 +117,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     frame: false,
+    icon: path.join(__dirname, '..', 'assets', 'icon.icns'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
