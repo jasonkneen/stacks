@@ -6,9 +6,10 @@ interface Props {
   item: SpatialItem;
   onChange: (val: string) => void;
   onOpenNote?: (rect: DOMRect) => void;
+  contentZoom?: number;
 }
 
-export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote }) => {
+export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote, contentZoom = 1 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const allowInlineEditing = false;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -121,7 +122,8 @@ export const NoteComponent: React.FC<Props> = memo(({ item, onChange, onOpenNote
       >
         <div
             ref={contentRef}
-            className={`w-full min-h-full px-6 pt-8 pb-8 outline-none text-gray-800 text-base leading-relaxed transition-all ease-out ${isEditing ? 'pt-16 cursor-text' : 'cursor-default pointer-events-none'}`}
+            className={`w-full min-h-full px-6 pt-8 pb-8 outline-none text-gray-800 leading-relaxed transition-all ease-out ${isEditing ? 'pt-16 cursor-text' : 'cursor-default pointer-events-none'}`}
+            style={{ fontSize: `${contentZoom}rem` }}
             contentEditable={isEditing}
             onBlur={() => setIsEditing(false)}
             onInput={handleInput}

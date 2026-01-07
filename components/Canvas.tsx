@@ -30,6 +30,7 @@ interface CanvasProps {
   onBlankCanvasDoubleClick?: (position: { x: number; y: number }) => void; // For opening AI chat on empty canvas
   layoutType?: LayoutType; // Current layout mode - disables grid for 'random' and 'free'
   contextTip?: string; // Contextual tip to show in bottom-left
+  contentZoom?: number; // Zoom level for content inside items (text size)
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -59,6 +60,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onBlankCanvasDoubleClick,
   layoutType = 'grid',
   contextTip,
+  contentZoom = 1,
 }) => {
   // Disable grid snapping for random and free layouts
   const enableGridSnap = layoutType === 'grid' || layoutType === 'bento';
@@ -966,6 +968,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               onHover={setHoveredItemId}
               onConnectStart={handleConnectStart}
               onAIPromptStart={(e, itemId, pos) => onAIPromptStart(itemId, pos)}
+              contentZoom={contentZoom}
             />
           );
         })}

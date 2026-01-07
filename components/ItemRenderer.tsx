@@ -25,8 +25,9 @@ interface ItemRendererProps {
   onHover: (id: string | null) => void;
   onConnectStart?: (e: React.MouseEvent, id: string) => void;
   onAIPromptStart: (e: React.MouseEvent, itemId: string, position: { x: number; y: number }) => void;
-  isHighlighted?: boolean; // For target node highlighting
-  zoom?: number; // Camera zoom for inverse scaling of handles
+  isHighlighted?: boolean;
+  zoom?: number;
+  contentZoom?: number;
 }
 
 export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
@@ -47,7 +48,8 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onConnectStart,
   onAIPromptStart,
   isHighlighted = false,
-  zoom = 1
+  zoom = 1,
+  contentZoom = 1
 }) => {
   const [activeHandle, setActiveHandle] = useState<HandlePosition>('right');
   const [isHovered, setIsHovered] = useState(false);
@@ -118,9 +120,9 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   const renderContent = () => {
     switch (item.type) {
       case 'sticky':
-        return <StickyComponent item={item} onChange={onUpdateContent} />;
+        return <StickyComponent item={item} onChange={onUpdateContent} contentZoom={contentZoom} />;
       case 'note':
-        return <NoteComponent item={item} onChange={onUpdateContent} onOpenNote={(rect) => onOpenNote(item, rect)} />;
+        return <NoteComponent item={item} onChange={onUpdateContent} onOpenNote={(rect) => onOpenNote(item, rect)} contentZoom={contentZoom} />;
       case 'image':
       case 'video':
         return <MediaComponent item={item} onDoubleClick={(rect) => onOpenMedia(item, rect)} />;
