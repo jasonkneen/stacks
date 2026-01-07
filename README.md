@@ -2,6 +2,10 @@
 
 AI-powered infinite canvas workspace for notes, images, and creative organization.
 
+Free to use for personal use, one-time license of $49 for unrestricted usage - bit.ly/4aNe23d
+
+Please consider a license
+
 ## Features
 
 - Infinite canvas with zoom and pan
