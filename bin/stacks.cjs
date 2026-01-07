@@ -1,20 +1,17 @@
 #!/usr/bin/env node
 
-/**
- * npx launcher for Stacks
- * Downloads and caches Electron binary on first run, then launches the app
- * Electron is cached in ~/.stacks/ for persistence across npx runs
- */
-
-const { spawn, execFileSync } = require('child_process')
+const { spawn, execFileSync, execFile } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const https = require('https')
 
-const APP_NAME = 'stacks'
+const APP_NAME = 'stacks-ai'
 const APP_DIR = path.join(__dirname, '..')
 const CACHE_DIR = path.join(os.homedir(), '.stacks')
 const ELECTRON_CACHE = path.join(CACHE_DIR, 'electron')
+const UPDATE_CHECK_FILE = path.join(CACHE_DIR, 'last-update-check')
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000
 
 let proxyProcess = null
 
@@ -80,6 +77,113 @@ async function ensureElectron() {
   }
 }
 
+function getCurrentVersion() {
+  try {
+    const pkgPath = path.join(APP_DIR, 'package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+    return pkg.version
+  } catch {
+    return null
+  }
+}
+
+function fetchLatestVersion() {
+  return new Promise((resolve) => {
+    const req = https.get(`https://registry.npmjs.org/${APP_NAME}/latest`, {
+      headers: { 'Accept': 'application/json' },
+      timeout: 5000
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        resolve(null)
+        return
+      }
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        try {
+          const pkg = JSON.parse(data)
+          resolve(pkg.version)
+        } catch {
+          resolve(null)
+        }
+      })
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { req.destroy(); resolve(null) })
+  })
+}
+
+function shouldCheckForUpdates() {
+  try {
+    if (!fs.existsSync(UPDATE_CHECK_FILE)) return true
+    const lastCheck = parseInt(fs.readFileSync(UPDATE_CHECK_FILE, 'utf8'), 10)
+    return Date.now() - lastCheck > UPDATE_CHECK_INTERVAL
+  } catch {
+    return true
+  }
+}
+
+function recordUpdateCheck() {
+  try {
+    ensureCacheDir()
+    fs.writeFileSync(UPDATE_CHECK_FILE, Date.now().toString())
+  } catch {}
+}
+
+function compareVersions(current, latest) {
+  if (!current || !latest) return 0
+  const c = current.split('.').map(Number)
+  const l = latest.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((l[i] || 0) > (c[i] || 0)) return 1
+    if ((l[i] || 0) < (c[i] || 0)) return -1
+  }
+  return 0
+}
+
+async function checkForUpdates() {
+  if (!shouldCheckForUpdates()) return
+
+  const current = getCurrentVersion()
+  const latest = await fetchLatestVersion()
+  recordUpdateCheck()
+
+  if (compareVersions(current, latest) > 0) {
+    console.log(`\n📦 Update available: v${current} → v${latest}`)
+    console.log(`   Run: npx stacks-ai@latest`)
+    console.log(`   Or:  npm install -g stacks-ai@latest\n`)
+  }
+}
+
+async function performUpdate() {
+  const current = getCurrentVersion()
+  const latest = await fetchLatestVersion()
+
+  if (!latest) {
+    console.log('✗ Could not check for updates (network error)')
+    return false
+  }
+
+  if (compareVersions(current, latest) <= 0) {
+    console.log(`✓ Already on latest version (v${current})`)
+    return false
+  }
+
+  console.log(`\n📦 Updating stacks-ai: v${current} → v${latest}...\n`)
+
+  try {
+    const npm = getNpmCommand()
+    execFileSync(npm, ['install', '-g', `stacks-ai@${latest}`], { stdio: 'inherit' })
+    console.log(`\n✓ Updated to v${latest}`)
+    console.log('  Run stacks-ai again to use the new version.\n')
+    return true
+  } catch (error) {
+    console.error('✗ Update failed:', error.message)
+    console.error(`  Try manually: npm install -g stacks-ai@latest`)
+    return false
+  }
+}
+
 function checkBuilt() {
   const distDir = path.join(APP_DIR, 'dist')
   const indexHtml = path.join(distDir, 'index.html')
@@ -142,6 +246,7 @@ async function launch() {
   try {
     console.log(`\n🚀 Starting Stacks...\n`)
 
+    checkForUpdates()
     checkBuilt()
     startProxy()
     const electronPath = await ensureElectron()
@@ -188,20 +293,33 @@ async function launch() {
 const args = process.argv.slice(2)
 
 if (args.includes('--help') || args.includes('-h')) {
+  const version = getCurrentVersion() || 'unknown'
   console.log(`
-Stacks - AI-powered infinite canvas
+Stacks v${version} - AI-powered infinite canvas
 
 Usage:
-  npx stacks-ai          Launch the app
-  npx stacks-ai --clean  Clear cached Electron installation
-  npx stacks-ai --help   Show this help message
+  npx stacks-ai            Launch the app
+  npx stacks-ai --update   Check for and install updates
+  npx stacks-ai --version  Show current version
+  npx stacks-ai --clean    Clear cached Electron installation
+  npx stacks-ai --help     Show this help message
 
 Cache location: ${CACHE_DIR}
 `)
   process.exit(0)
 }
 
-if (args.includes('--clean')) {
+if (args.includes('--version') || args.includes('-v')) {
+  const version = getCurrentVersion() || 'unknown'
+  console.log(`stacks-ai v${version}`)
+  process.exit(0)
+}
+
+if (args.includes('--update') || args.includes('-u')) {
+  performUpdate().then(updated => {
+    process.exit(updated ? 0 : 1)
+  })
+} else if (args.includes('--clean')) {
   console.log('Cleaning Electron cache...')
   if (fs.existsSync(ELECTRON_CACHE)) {
     fs.rmSync(ELECTRON_CACHE, { recursive: true })
@@ -210,6 +328,6 @@ if (args.includes('--clean')) {
     console.log('Cache already empty')
   }
   process.exit(0)
+} else {
+  launch()
 }
-
-launch()

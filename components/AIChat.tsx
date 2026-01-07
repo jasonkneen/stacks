@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, ChevronDown, Image as ImageIcon, FileText, StickyNote, X, Video, Mic } from 'lucide-react';
 
 export type AIResponseFormat = 'text' | 'sticky' | 'note' | 'image' | 'document';
@@ -125,34 +125,6 @@ export const parseAIResponse = (rawResponse: string): AIResponse[] => {
   return responses;
 };
 
-// Detect if prompt is image-related
-const detectImagePrompt = (prompt: string): boolean => {
-  const imageKeywords = [
-    'generate image', 'create image', 'make image', 'draw', 'paint',
-    'generate a picture', 'create a picture', 'make a picture',
-    'generate an image', 'create an image', 'make an image',
-    'image of', 'picture of', 'illustration of', 'photo of',
-    'visualize', 'render', 'design a', 'sketch',
-    // Image transformation keywords
-    'color this', 'colour this', 'colorize', 'colourize', 'add color', 'add colour',
-    'fill in', 'color in', 'colour in', 'make it colorful', 'make it colourful',
-    'transform this', 'edit this image', 'modify this image', 'change this image',
-    'stylize', 'restyle', 'reimagine', 'recreate'
-  ];
-  const lowerPrompt = prompt.toLowerCase();
-  return imageKeywords.some(kw => lowerPrompt.includes(kw));
-};
-
-// Detect if prompt is asking for ideas/brainstorming
-const detectBrainstormPrompt = (prompt: string): boolean => {
-  const keywords = [
-    'ideas', 'brainstorm', 'suggest', 'give me', 'list of',
-    'options for', 'alternatives', 'inspiration'
-  ];
-  const lowerPrompt = prompt.toLowerCase();
-  return keywords.some(kw => lowerPrompt.includes(kw));
-};
-
 export const AIChat: React.FC<Props> = ({
   position,
   placeholder = "Ask AI...",
@@ -170,54 +142,7 @@ export const AIChat: React.FC<Props> = ({
     imageResolution: '1024x1024',
     imageStyle: 'natural'
   });
-  // Track if user manually selected an output type (overrides auto-detection)
-  const [userOverride, setUserOverride] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Smart classification with scoring
-  const detectedType = useMemo(() => {
-    if (!prompt.trim()) return 'auto';
-
-    const text = prompt;
-    const chars = text.length;
-    const lines = text.split(/\r?\n/).length;
-
-    // Hard lock: image patterns
-    const imagePatterns = [
-      /!\[[^\]]*]\([^)]*\)/,
-      /<img\b[^>]*>/i,
-      /\bdata:image\//i,
-      /\b(?:image|draw|paint|generate.*image|create.*image|make.*image)\b/i,
-      /\b(?:color|colour|fill in|colorize|color this|colour this)\b/i,
-      /\b(?:photo|picture|illustration|render|visualize)\b/i
-    ];
-    if (imagePatterns.some(re => re.test(text))) return 'image';
-
-    // Count structural elements
-    const headings = (text.match(/^#{1,6}\s+/gm) || []).length;
-    const bullets = (text.match(/^\s*[-*]\s+/gm) || []).length;
-    const separators = (text.match(/^---\s*$/gm) || []).length;
-    const paras = (text.match(/\n{2,}/g) || []).length;
-
-    // Scoring
-    let scoreSticky = 0, scoreNote = 0;
-
-    // Sticky: short, simple
-    if (chars < 300) scoreSticky += 3;
-    if (lines <= 5) scoreSticky += 2;
-    if (headings <= 1) scoreSticky += 1;
-    if (/^\s*(?:todo|remember|note|idea|reminder)\b/i.test(text)) scoreSticky += 3;
-    if (/^\s*[-*]\s*\[[ x]\]\s+/m.test(text)) scoreSticky += 2; // checkboxes
-
-    // Note: structured, moderate length
-    if (chars >= 200 && chars <= 4000) scoreNote += 2;
-    if (headings >= 1) scoreNote += 2;
-    if (bullets >= 2) scoreNote += 1;
-    if (paras >= 1) scoreNote += 2;
-    if (/^\s*(?:Summary|Overview|Context|Background|Details|Plan)\s*:/mi.test(text)) scoreNote += 2;
-
-    return scoreSticky > scoreNote ? 'sticky' : 'note';
-  }, [prompt]);
 
   // Auto-expand when user starts typing
   useEffect(() => {
@@ -225,13 +150,6 @@ export const AIChat: React.FC<Props> = ({
       setIsExpanded(true);
     }
   }, [prompt, isExpanded]);
-
-  // Auto-select output type based on detection (only if user hasn't manually overridden)
-  useEffect(() => {
-    if (detectedType !== 'auto' && options.outputType === 'auto' && !userOverride) {
-      setOptions(prev => ({ ...prev, outputType: detectedType }));
-    }
-  }, [detectedType, options.outputType, userOverride]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -251,12 +169,8 @@ export const AIChat: React.FC<Props> = ({
       console.log('[AIChat] Empty prompt, not submitting');
       return;
     }
-    // Determine effective output type: user's manual choice takes priority over auto-detection
-    const effectiveOutputType = userOverride
-      ? options.outputType
-      : (detectedType !== 'auto' ? detectedType : options.outputType);
-    console.log('[AIChat] Submitting:', { prompt, options, detectedType, userOverride, effectiveOutputType });
-    onSubmit(prompt, { ...options, outputType: effectiveOutputType });
+    console.log('[AIChat] Submitting:', { prompt, options });
+    onSubmit(prompt, options);
   };
 
   const outputTypeIcons = {
@@ -346,13 +260,9 @@ export const AIChat: React.FC<Props> = ({
                     <button
                       key={type}
                       type="button"
-                      onClick={() => {
-                        setOptions(o => ({ ...o, outputType: type }));
-                        // User clicked = override auto-detection (except when clicking 'auto')
-                        setUserOverride(type !== 'auto');
-                      }}
+                      onClick={() => setOptions(o => ({ ...o, outputType: type }))}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        (userOverride ? options.outputType : (detectedType !== 'auto' ? detectedType : options.outputType)) === type
+                        options.outputType === type
                           ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
                           : 'bg-white text-gray-600 hover:bg-gray-100'
                       }`}
@@ -365,7 +275,7 @@ export const AIChat: React.FC<Props> = ({
               </div>
 
               {/* Image-specific options */}
-              {((userOverride ? options.outputType : detectedType) === 'image' || options.outputType === 'image') && (
+              {options.outputType === 'image' && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-gray-500 w-16">Size:</span>
@@ -409,13 +319,7 @@ export const AIChat: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Detected prompt hint - only show when not manually overridden */}
-              {detectedType !== 'auto' && !userOverride && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-blue-600">
-                  {outputTypeIcons[detectedType]}
-                  <span>Detected: {detectedType} generation</span>
-                </div>
-              )}
+
             </div>
           )}
         </div>
