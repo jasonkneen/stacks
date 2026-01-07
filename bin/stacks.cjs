@@ -258,6 +258,40 @@ function stopRunningInstance() {
   return false
 }
 
+// Proxy process management
+let proxyProcess = null
+
+function startProxy() {
+  try {
+    const proxyPath = path.join(APP_DIR, 'dist', 'mcp', 'proxy.js')
+    if (!fs.existsSync(proxyPath)) {
+      console.error('⚠️  MCP proxy not found. Run `npm run build` first.')
+      return
+    }
+
+    const nodeCmd = getNodeCommand()
+    proxyProcess = spawn(nodeCmd, [proxyPath], {
+      stdio: 'ignore',
+      detached: false
+    })
+
+    proxyProcess.on('error', (err) => {
+      console.error('MCP proxy error:', err.message)
+    })
+  } catch (err) {
+    console.error('Failed to start proxy:', err.message)
+  }
+}
+
+function stopProxy() {
+  if (proxyProcess) {
+    try {
+      proxyProcess.kill('SIGTERM')
+      proxyProcess = null
+    } catch {}
+  }
+}
+
 async function launch() {
   try {
     console.log(`\n🚀 Starting Stacks...\n`)
