@@ -97,33 +97,33 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
               e.stopPropagation();
               setDeleteConfirm(space.id);
             }}
-            className="absolute -top-2 -right-2 z-10 w-8 h-8 bg-red-500/90 backdrop-blur-md rounded-full shadow-lg hover:bg-red-600 transition-all opacity-0 group-hover/card:opacity-100 flex items-center justify-center"
+            className="absolute -top-2 -right-2 z-10 w-8 h-8 bg-white/40 backdrop-blur-xl border border-white/60 rounded-full shadow-lg hover:bg-red-500/80 transition-all opacity-0 group-hover/card:opacity-100 flex items-center justify-center"
             title="Delete space"
           >
-            <X size={16} className="text-white" />
+            <X size={16} className="text-gray-700 hover:text-white" />
           </button>
 
           {/* Space Card */}
           <div
-            className={`w-80 h-96 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ${
+            className={`w-80 h-96 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 backdrop-blur-xl ${
               space.id === activeSpaceId
-                ? 'ring-4 ring-blue-500/50 bg-white'
-                : 'bg-white/90 hover:shadow-3xl'
+                ? 'ring-4 ring-blue-500/50 bg-white/40'
+                : 'bg-white/30 hover:shadow-3xl hover:bg-white/40'
             }`}
             style={{
-              border: '1px solid rgba(0,0,0,0.08)'
+              border: '1px solid rgba(255,255,255,0.6)'
             }}
           >
             {/* Preview Area */}
-            <div className="w-full h-full p-4 bg-gray-50">
+            <div className="w-full h-full p-4">
               {renderSpacePreview(space)}
             </div>
           </div>
 
           {/* Space Name Badge */}
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
-            <div className="bg-gray-900/90 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full shadow-xl">
-              <span className="text-sm font-semibold text-white whitespace-nowrap">
+            <div className="bg-white/40 backdrop-blur-xl border border-white/60 px-4 py-2 rounded-full shadow-xl">
+              <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">
                 {space.name}
               </span>
             </div>
@@ -138,23 +138,23 @@ export const SpaceOverview: React.FC<Props> = ({ spaces, activeSpaceId, onSelect
       >
         {/* Ghost Card with Dashed Border */}
         <div
-          className="w-80 h-96 rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-2xl bg-transparent"
+          className="w-80 h-96 rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-2xl bg-white/20 backdrop-blur-xl hover:bg-white/30"
           style={{
-            border: '2px dashed rgba(100, 116, 139, 0.3)'
+            border: '2px dashed rgba(255, 255, 255, 0.5)'
           }}
         >
           {/* Center Icon */}
           <div className="w-full h-full flex items-center justify-center">
-            <div className="rounded-2xl bg-gray-200/50 p-6 transition-all duration-300 hover:bg-gray-300/50">
-              <SquarePlus size={48} className="text-gray-400" strokeWidth={1.5} />
+            <div className="rounded-2xl bg-white/30 p-6 transition-all duration-300 hover:bg-white/50">
+              <SquarePlus size={48} className="text-white/70" strokeWidth={1.5} />
             </div>
           </div>
         </div>
 
         {/* Badge */}
         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
-          <div className="bg-gray-900/90 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full shadow-xl">
-            <span className="text-sm font-semibold text-white whitespace-nowrap">
+          <div className="bg-white/40 backdrop-blur-xl border border-white/60 px-4 py-2 rounded-full shadow-xl">
+            <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">
               New Space
             </span>
           </div>

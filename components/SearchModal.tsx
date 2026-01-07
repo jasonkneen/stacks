@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, X, StickyNote, Image, Video, Mic, Type, Folder, FileText } from 'lucide-react';
+import { Search, X, StickyNote, Image, Video, Mic, Type, Layers, FileText } from 'lucide-react';
 import { SpatialItem, Space } from '../types';
 
 type FilterType = 'all' | 'note' | 'image' | 'video' | 'audio' | 'text' | 'folder';
@@ -18,7 +18,7 @@ const filterConfig: { type: FilterType; icon: React.ReactNode; label: string }[]
   { type: 'video', icon: <Video size={16} />, label: 'Videos' },
   { type: 'audio', icon: <Mic size={16} />, label: 'Audio' },
   { type: 'text', icon: <Type size={16} />, label: 'Text' },
-  { type: 'folder', icon: <Folder size={16} />, label: 'Stacks' },
+  { type: 'folder', icon: <Layers size={16} />, label: 'Stacks' },
 ];
 
 export const SearchModal: React.FC<Props> = ({ isOpen, onClose, spaces, onSelectItem }) => {
@@ -130,7 +130,7 @@ export const SearchModal: React.FC<Props> = ({ isOpen, onClose, spaces, onSelect
       case 'video': return <Video size={18} className="text-purple-500" />;
       case 'audio': return <Mic size={18} className="text-green-500" />;
       case 'text': return <Type size={18} className="text-gray-500" />;
-      case 'folder': return <Folder size={18} className="text-orange-500" />;
+      case 'folder': return <Layers size={18} className="text-orange-500" />;
       default: return <FileText size={18} className="text-gray-400" />;
     }
   };
@@ -155,36 +155,36 @@ export const SearchModal: React.FC<Props> = ({ isOpen, onClose, spaces, onSelect
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-2xl mx-4 bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 overflow-hidden animate-modal-enter"
+        className="relative w-full max-w-2xl mx-4 bg-white/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/60 overflow-hidden animate-modal-enter"
         onClick={e => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-          <Search size={22} className="text-gray-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/30">
+          <Search size={22} className="text-gray-600 flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search items..."
-            className="flex-1 bg-transparent text-white text-lg outline-none placeholder:text-gray-500"
+            className="flex-1 bg-transparent text-gray-800 text-lg outline-none placeholder:text-gray-500"
           />
           <div className="flex items-center gap-1 text-gray-500 text-xs">
-            <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">⌘</kbd>
-            <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">K</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white/50 rounded text-gray-600">⌘</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white/50 rounded text-gray-600">K</kbd>
           </div>
         </div>
 
         {/* Filter Buttons */}
-        <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10 overflow-x-auto">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-white/30 overflow-x-auto">
           {filterConfig.map(({ type, icon, label }) => (
             <button
               key={type}
               onClick={() => setFilter(type)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all whitespace-nowrap border ${
                 filter === type
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                  ? 'bg-gray-800 text-white border-gray-700'
+                  : 'bg-white/40 backdrop-blur-sm text-gray-700 border-white/60 hover:bg-white/60 hover:text-gray-900'
               }`}
             >
               {icon}
@@ -212,22 +212,24 @@ export const SearchModal: React.FC<Props> = ({ isOpen, onClose, spaces, onSelect
                 }}
                 className={`flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors ${
                   index === selectedIndex
-                    ? 'bg-white/10'
-                    : 'hover:bg-white/5'
+                    ? 'bg-gray-800/80 text-white'
+                    : 'hover:bg-white/30 text-gray-800'
                 }`}
               >
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                  index === selectedIndex ? 'bg-white/20' : 'bg-white/50'
+                }`}>
                   {getItemIcon(item.type)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-white truncate">
+                  <div className={`truncate ${index === selectedIndex ? 'text-white' : 'text-gray-900'}`}>
                     {getItemPreview(item)}
                   </div>
-                  <div className="text-gray-500 text-sm truncate">
+                  <div className={`text-sm truncate ${index === selectedIndex ? 'text-gray-300' : 'text-gray-600'}`}>
                     in {space.name}
                   </div>
                 </div>
-                <div className="text-gray-600 text-xs">
+                <div className={`text-xs ${index === selectedIndex ? 'text-gray-400' : 'text-gray-600'}`}>
                   {item.type}
                 </div>
               </div>
@@ -237,10 +239,10 @@ export const SearchModal: React.FC<Props> = ({ isOpen, onClose, spaces, onSelect
 
         {/* Footer hint */}
         {filteredItems.length > 0 && (
-          <div className="px-5 py-2 border-t border-white/10 text-gray-500 text-xs flex items-center gap-4">
-            <span><kbd className="px-1 bg-gray-800 rounded">↑↓</kbd> Navigate</span>
-            <span><kbd className="px-1 bg-gray-800 rounded">↵</kbd> Select</span>
-            <span><kbd className="px-1 bg-gray-800 rounded">esc</kbd> Close</span>
+          <div className="px-5 py-2 border-t border-white/30 text-gray-600 text-xs flex items-center gap-4">
+            <span><kbd className="px-1 bg-white/50 rounded text-gray-700">↑↓</kbd> Navigate</span>
+            <span><kbd className="px-1 bg-white/50 rounded text-gray-700">↵</kbd> Select</span>
+            <span><kbd className="px-1 bg-white/50 rounded text-gray-700">esc</kbd> Close</span>
           </div>
         )}
       </div>
