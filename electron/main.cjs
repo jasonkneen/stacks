@@ -1,4 +1,4 @@
-const { app, BrowserWindow, nativeImage } = require('electron')
+const { app, BrowserWindow, nativeImage, session } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const net = require('net')
@@ -124,11 +124,41 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: !isDev // Allow local file loading in production
+      webSecurity: !isDev, // Allow local file loading in production
+      webviewTag: true // Enable webview for browser component
     },
     title: 'Stacks',
     backgroundColor: '#000000'
   })
+
+  // Configure CORS bypass for both default session and browser partition
+  const configureSession = (sess) => {
+    sess.webRequest.onBeforeSendHeaders((details, callback) => {
+      // Remove origin header to bypass CORS for embedded browser
+      delete details.requestHeaders['Origin']
+      callback({ requestHeaders: details.requestHeaders })
+    })
+
+    sess.webRequest.onHeadersReceived((details, callback) => {
+      // Remove restrictive CORS headers
+      const headers = { ...details.responseHeaders }
+      delete headers['x-frame-options']
+      delete headers['X-Frame-Options']
+      delete headers['content-security-policy']
+      delete headers['Content-Security-Policy']
+
+      // Allow all origins
+      headers['access-control-allow-origin'] = ['*']
+      headers['access-control-allow-methods'] = ['GET, POST, PUT, DELETE, OPTIONS']
+      headers['access-control-allow-headers'] = ['*']
+
+      callback({ responseHeaders: headers })
+    })
+  }
+
+  // Apply to default session (for iframes) and webview partition
+  configureSession(session.defaultSession)
+  configureSession(session.fromPartition('persist:browser'))
 
   if (isDev) {
     // Development: Load from Vite server

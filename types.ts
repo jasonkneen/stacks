@@ -1,4 +1,4 @@
-export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder';
+export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder' | 'browser';
 
 // Auto-arrange layout types
 export type LayoutType = 'grid' | 'bento' | 'random' | 'free';
@@ -42,6 +42,11 @@ export interface SpatialItem {
     isVariant?: boolean;
     imageStyle?: string;
     originalId?: string;
+    // Browser metadata
+    browserUrl?: string;
+    browserTabs?: { id: string; url: string; title: string; active: boolean }[];
+    browserHistory?: string[];
+    browserHistoryIndex?: number;
   };
   linkedSpaceId?: string; // For folders
 }
@@ -75,4 +80,5 @@ export const ITEM_DEFAULTS = {
   note: { w: 300, h: 400, bg: 'bg-white' },
   folder: { w: 160, h: 120, bg: 'bg-blue-100' },
   media: { w: 300, h: 200, bg: 'bg-gray-800' },
+  browser: { w: 800, h: 600, bg: 'bg-gray-900' },
 };

@@ -18,7 +18,7 @@ import { useContentZoom } from './hooks/useContentZoom';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { getFitToViewParams, getLayoutFunction } from './utils/layouts';
 import { Space, SpatialItem, Connection, LayoutType, SortOption, FlowDirection, ItemSpacing } from './types';
-import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search, Globe } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
@@ -1928,6 +1928,41 @@ const App: React.FC = () => {
                 >
                   <Layers size={18} />
                   <span className="text-sm">Stack</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const now = Date.now();
+                    const newItem: SpatialItem = {
+                      id: now.toString(),
+                      type: 'browser',
+                      x: -window.innerWidth/2 * 0.1,
+                      y: 0,
+                      w: 800,
+                      h: 600,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: 0,
+                      content: 'https://www.google.com',
+                      metadata: {
+                        createdAt: now,
+                        updatedAt: now,
+                        browserUrl: 'https://www.google.com',
+                        browserTabs: [{
+                          id: `tab-${now}`,
+                          url: 'https://www.google.com',
+                          title: 'New Tab',
+                          active: true
+                        }],
+                        browserHistory: ['https://www.google.com'],
+                        browserHistoryIndex: 0
+                      }
+                    };
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <Globe size={18} />
+                  <span className="text-sm">Browser</span>
                 </button>
               </div>
             )}

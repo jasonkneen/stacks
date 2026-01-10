@@ -4,6 +4,7 @@ import { StickyComponent } from './StickyComponent';
 import { NoteComponent } from './NoteComponent';
 import { MediaComponent } from './MediaComponent';
 import { FolderComponent } from './FolderComponent';
+import { BrowserComponent } from './BrowserComponent';
 import { Plus } from 'lucide-react';
 
 type HandlePosition = 'top' | 'right' | 'bottom' | 'left';
@@ -19,7 +20,9 @@ interface ItemRendererProps {
   onNavigate: (spaceId: string) => void;
   onOpenMedia: (item: SpatialItem, rect: DOMRect) => void;
   onOpenNote: (item: SpatialItem, rect: DOMRect) => void;
+  onOpenBrowser?: (item: SpatialItem, rect: DOMRect) => void;
   onUpdateContent: (content: string) => void;
+  onUpdateMetadata?: (itemId: string, metadata: Partial<SpatialItem['metadata']>) => void;
   onEditFolderName: (item: SpatialItem) => void;
   getSpaceItems: (spaceId: string) => SpatialItem[];
   onHover: (id: string | null) => void;
@@ -41,7 +44,9 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   onNavigate,
   onOpenMedia,
   onOpenNote,
+  onOpenBrowser,
   onUpdateContent,
+  onUpdateMetadata,
   onEditFolderName,
   getSpaceItems,
   onHover,
@@ -136,12 +141,21 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             zoom={zoom}
           />
         );
+      case 'browser':
+        return (
+          <BrowserComponent
+            item={item}
+            onUpdateMetadata={(metadata) => onUpdateMetadata?.(item.id, metadata)}
+            onDoubleClick={onOpenBrowser ? (rect) => onOpenBrowser(item, rect) : undefined}
+          />
+        );
       default:
         return null;
     }
   };
 
   const isFolder = item.type === 'folder';
+  const isBrowser = item.type === 'browser';
 
   return (
     <div
@@ -162,7 +176,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       }}
       onMouseMove={handleMouseMove}
     >
-      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : 'overflow-hidden bg-white border border-gray-100'}`}>
+      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : isBrowser ? 'overflow-hidden bg-gray-900 border border-gray-700' : 'overflow-hidden bg-white border border-gray-100'}`}>
           {renderContent()}
       </div>
 
@@ -361,6 +375,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
     prevItem.color === nextItem.color &&
     prevItem.type === nextItem.type &&
     prevItem.zIndex === nextItem.zIndex &&
-    prevItem.metadata?.isGenerating === nextItem.metadata?.isGenerating
+    prevItem.metadata?.isGenerating === nextItem.metadata?.isGenerating &&
+    prevItem.metadata?.browserUrl === nextItem.metadata?.browserUrl
   );
 });

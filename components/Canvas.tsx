@@ -963,6 +963,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                       currentItems.map(i => i.id === item.id ? { ...i, content, metadata: { ...i.metadata, updatedAt: Date.now() } } : i)
                   );
               }}
+              onUpdateMetadata={(itemId, metadata) => {
+                  // Update item metadata (used by browser component)
+                  onUpdateItems(currentItems =>
+                      currentItems.map(i => i.id === itemId ? { ...i, metadata: { ...i.metadata, ...metadata, updatedAt: Date.now() } } : i)
+                  );
+              }}
               onEditFolderName={onEditFolderName}
               getSpaceItems={getSpaceItems}
               onHover={setHoveredItemId}
