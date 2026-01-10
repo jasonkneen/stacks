@@ -118,6 +118,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   
   // Physics State
   const dragTiltRef = useRef(0);
+  const shiftHeldRef = useRef(false);
   
   // Inertia State
   const velocityRef = useRef({ x: 0, y: 0 });
@@ -437,14 +438,21 @@ export const Canvas: React.FC<CanvasProps> = ({
         const topLeftX = startData.itemX;
         const topLeftY = startData.itemY;
 
-        // Angle from top-left to mouse position
-        const dx = mouseWorldX - topLeftX;
-        const dy = mouseWorldY - topLeftY;
-        const angleRad = Math.atan2(dy, dx);
-        const angleDeg = (angleRad * 180 / Math.PI) - 45; // -45 to align with SE resize handle
+        // Track shift key state for resize too
+        shiftHeldRef.current = e.shiftKey;
 
-        // Clamp rotation to reasonable range
-        const newRotation = Math.max(-15, Math.min(15, angleDeg * 0.3));
+        // If shift held, lock rotation to 0
+        let newRotation = 0;
+        if (!e.shiftKey) {
+          // Angle from top-left to mouse position
+          const dx = mouseWorldX - topLeftX;
+          const dy = mouseWorldY - topLeftY;
+          const angleRad = Math.atan2(dy, dx);
+          const angleDeg = (angleRad * 180 / Math.PI) - 45; // -45 to align with SE resize handle
+
+          // Clamp rotation to reasonable range
+          newRotation = Math.max(-15, Math.min(15, angleDeg * 0.3));
+        }
 
         // Store in ref
         resizeDimensionsRef.current = { w: newW, h: newH, gridCellsX, gridCellsY, rotation: newRotation };
@@ -456,8 +464,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             if (el && resizeDimensionsRef.current) {
               el.style.width = `${resizeDimensionsRef.current.w}px`;
               el.style.height = `${resizeDimensionsRef.current.h}px`;
+              // Use 0 rotation when shift is held
+              const visualRotation = shiftHeldRef.current ? 0 : resizeDimensionsRef.current.rotation;
               const existingTransform = el.style.transform.replace(/rotate\([^)]+\)/, '').trim();
-              el.style.transform = `${existingTransform} rotate(${resizeDimensionsRef.current.rotation}deg)`;
+              el.style.transform = `${existingTransform} rotate(${visualRotation}deg)`;
             }
             resizeRafRef.current = 0;
           });
@@ -477,18 +487,26 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingId && dragStartDataRef.current) {
-        // Drag Item Logic - smooth tilt with momentum (no swing-back)
-        const targetTilt = Math.max(Math.min(deltaX * 0.5, 15), -15);
-        const currentTilt = dragTiltRef.current;
+        // Track shift key state
+        shiftHeldRef.current = e.shiftKey;
 
-        // Only approach target if moving in same direction or target is stronger
-        // This prevents swing-back when slowing down
-        if (Math.abs(targetTilt) > Math.abs(currentTilt) || Math.sign(targetTilt) === Math.sign(currentTilt)) {
-            // Quick response when adding tilt
-            dragTiltRef.current = currentTilt + (targetTilt - currentTilt) * 0.3;
+        // Drag Item Logic - smooth tilt with momentum (no swing-back)
+        // If shift is held, lock to 0 rotation
+        if (e.shiftKey) {
+            dragTiltRef.current = 0;
         } else {
-            // Very slow decay - don't swing back during motion
-            dragTiltRef.current = currentTilt * 0.98;
+            const targetTilt = Math.max(Math.min(deltaX * 0.5, 15), -15);
+            const currentTilt = dragTiltRef.current;
+
+            // Only approach target if moving in same direction or target is stronger
+            // This prevents swing-back when slowing down
+            if (Math.abs(targetTilt) > Math.abs(currentTilt) || Math.sign(targetTilt) === Math.sign(currentTilt)) {
+                // Quick response when adding tilt
+                dragTiltRef.current = currentTilt + (targetTilt - currentTilt) * 0.3;
+            } else {
+                // Very slow decay - don't swing back during motion
+                dragTiltRef.current = currentTilt * 0.98;
+            }
         }
 
         // Calculate total mouse movement from drag start
@@ -557,6 +575,8 @@ export const Canvas: React.FC<CanvasProps> = ({
     // Clear resize state and persist final dimensions + rotation
     if (resizingId && resizeDimensionsRef.current) {
         const { w, h, gridCellsX, gridCellsY, rotation } = resizeDimensionsRef.current;
+        // If shift was held during resize, force rotation to 0
+        const finalRotation = shiftHeldRef.current ? 0 : rotation;
 
         // Persist resize + rotation to parent state NOW (on mouseup only)
         onUpdateItems(currentItems =>
@@ -566,7 +586,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                       ...item,
                       w,
                       h,
-                      rotation,
+                      rotation: finalRotation,
                       metadata: {
                         ...item.metadata,
                         gridCellsX,
@@ -626,11 +646,13 @@ export const Canvas: React.FC<CanvasProps> = ({
         // Capture values BEFORE clearing refs (closures would see null otherwise)
         const finalOffset = { ...currentDragOffsetRef.current };
         const itemPositions = new Map(dragStartDataRef.current.itemPositions);
+        const wasShiftHeld = shiftHeldRef.current;
 
         // Physics-based settle tilt: drag direction determines final tilt
         // Drag right → settle tilted right (positive rotation)
         // Drag left → settle tilted left (negative rotation)
-        const settleTilt = dragTiltRef.current * 0.5;
+        // If shift held, no tilt - lock to 0
+        const settleTilt = wasShiftHeld ? 0 : dragTiltRef.current * 0.5;
 
         const SNAP_TOLERANCE = 40;
 
@@ -641,6 +663,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                 if (startPos) {
                     const finalX = startPos.x + finalOffset.x;
                     const finalY = startPos.y + finalOffset.y;
+
+                    // If shift held, always set rotation to 0
+                    if (wasShiftHeld) {
+                        return {
+                            ...item,
+                            x: finalX,
+                            y: finalY,
+                            rotation: 0
+                        };
+                    }
 
                     // Check if close to grid snap point (only if grid snap enabled)
                     if (enableGridSnap) {
@@ -721,6 +753,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     currentDragOffsetRef.current = { x: 0, y: 0 };
     selectionBoxRef.current = null;
     dragTiltRef.current = 0;
+    shiftHeldRef.current = false;
     setSelectionBox(null);
   }, [isPanning, draggingId, resizingId, items, onStackItems, connectingLine, hoveredItemId, onConnect, onMarkManuallyPositioned, selection, startInertia, selectionBox, onSelectionChange]); 
 
@@ -995,7 +1028,9 @@ export const Canvas: React.FC<CanvasProps> = ({
       
       {/* Contextual Tip (bottom-left) */}
       <div className="absolute bottom-8 left-8 text-gray-400 text-xs pointer-events-none select-none transition-opacity duration-300">
-          {contextTip || 'Space + Drag to pan'}
+          {draggingId || resizingId
+            ? 'Hold Shift to lock rotation'
+            : contextTip || 'Space + Drag to pan'}
       </div>
 
       {/* Drop Zone Indicator */}

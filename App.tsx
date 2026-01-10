@@ -18,7 +18,7 @@ import { useContentZoom } from './hooks/useContentZoom';
 import { loadSpaces, saveSpaces } from './utils/storage';
 import { getFitToViewParams, getLayoutFunction } from './utils/layouts';
 import { Space, SpatialItem, Connection, LayoutType, SortOption, FlowDirection, ItemSpacing } from './types';
-import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search, Globe } from 'lucide-react';
+import { ArrowLeft, Menu, Plus, StickyNote, Type, Image as ImageIcon, Layers, SquarePlus, X, LayoutGrid, Zap, Settings, Video, Mic, Search, Globe, Ghost } from 'lucide-react';
 import ELK from 'elkjs';
 import { analyzeImage } from './utils/imageAnalysis';
 import { extractImageMetadata, extractVideoMetadata } from './utils/exifExtractor';
@@ -335,6 +335,22 @@ const App: React.FC = () => {
       });
     }, 50);
   }, [activeSpaceId]);
+
+  // Auto-fit view on initial load
+  useEffect(() => {
+    if (!isLoadingSpaces) {
+      triggerAutoFit();
+    }
+  }, [isLoadingSpaces, triggerAutoFit]);
+
+  // Auto-fit view when navigating to a different space
+  const prevActiveSpaceIdRef = React.useRef(activeSpaceId);
+  useEffect(() => {
+    if (prevActiveSpaceIdRef.current !== activeSpaceId) {
+      prevActiveSpaceIdRef.current = activeSpaceId;
+      triggerAutoFit();
+    }
+  }, [activeSpaceId, triggerAutoFit]);
 
   // Delete items
   const handleDeleteItems = useCallback((ids: Set<string>) => {
@@ -1590,6 +1606,7 @@ const App: React.FC = () => {
       ) : (
         <div className="w-full h-full">
           <Canvas
+              key={activeSpaceId}
               items={activeSpace.items}
               connections={activeSpace.connections || []}
               initialCamera={activeSpace.camera}
@@ -1963,6 +1980,32 @@ const App: React.FC = () => {
                 >
                   <Globe size={18} />
                   <span className="text-sm">Browser</span>
+                </button>
+                <button
+                  className="p-3 rounded-xl bg-gray-800/5 hover:bg-gray-800/10 text-gray-800 transition-all active:scale-95 flex items-center gap-2"
+                  onClick={() => {
+                    const now = Date.now();
+                    const newItem: SpatialItem = {
+                      id: now.toString(),
+                      type: 'terminal',
+                      x: -window.innerWidth/2 * 0.1 + 50,
+                      y: 50,
+                      w: 600,
+                      h: 400,
+                      zIndex: Math.max(...activeSpace.items.map(i => i.zIndex), 0) + 1,
+                      rotation: 0,
+                      content: '',
+                      metadata: {
+                        createdAt: now,
+                        updatedAt: now
+                      }
+                    };
+                    updateItems([...activeSpace.items, newItem]);
+                    setShowAddMenu(false);
+                  }}
+                >
+                  <Ghost size={18} />
+                  <span className="text-sm">Ghostty</span>
                 </button>
               </div>
             )}

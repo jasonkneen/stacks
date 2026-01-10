@@ -1,4 +1,4 @@
-export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder' | 'browser';
+export type ItemType = 'sticky' | 'note' | 'image' | 'video' | 'folder' | 'browser' | 'terminal';
 
 // Auto-arrange layout types
 export type LayoutType = 'grid' | 'bento' | 'random' | 'free';
@@ -81,4 +81,5 @@ export const ITEM_DEFAULTS = {
   folder: { w: 160, h: 120, bg: 'bg-blue-100' },
   media: { w: 300, h: 200, bg: 'bg-gray-800' },
   browser: { w: 800, h: 600, bg: 'bg-gray-900' },
+  terminal: { w: 600, h: 400, bg: 'bg-gray-900' },
 };

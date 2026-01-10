@@ -3,6 +3,7 @@ const { spawn } = require('child_process')
 const path = require('path')
 const net = require('net')
 const fs = require('fs')
+const { startPtyServer, stopPtyServer } = require('./pty-server.cjs')
 
 // Set app name for macOS menu
 app.name = 'Stacks'
@@ -160,6 +161,9 @@ function createWindow() {
   configureSession(session.defaultSession)
   configureSession(session.fromPartition('persist:browser'))
 
+  // Start PTY server for Ghostty terminal
+  startPtyServer()
+
   if (isDev) {
     // Development: Load from Vite server
     mainWindow.loadURL(`http://localhost:${serverPort}`)
@@ -205,6 +209,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  // Stop PTY server
+  stopPtyServer()
+
   // Kill vite process when app quits (dev mode only)
   if (viteProcess && !viteProcess.killed) {
     console.log('Stopping Vite server...')

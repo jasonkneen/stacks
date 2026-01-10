@@ -5,6 +5,7 @@ import { NoteComponent } from './NoteComponent';
 import { MediaComponent } from './MediaComponent';
 import { FolderComponent } from './FolderComponent';
 import { BrowserComponent } from './BrowserComponent';
+import { GhosttyComponent } from './GhosttyComponent';
 import { Plus } from 'lucide-react';
 
 type HandlePosition = 'top' | 'right' | 'bottom' | 'left';
@@ -15,6 +16,7 @@ interface ItemRendererProps {
   isDragging?: boolean;
   isResizing?: boolean;
   dragTilt?: number;
+  shiftHeld?: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onResizeStart?: (e: React.MouseEvent, id: string) => void;
   onNavigate: (spaceId: string) => void;
@@ -149,6 +151,12 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
             onDoubleClick={onOpenBrowser ? (rect) => onOpenBrowser(item, rect) : undefined}
           />
         );
+      case 'terminal':
+        return (
+          <GhosttyComponent
+            item={item}
+          />
+        );
       default:
         return null;
     }
@@ -156,6 +164,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
 
   const isFolder = item.type === 'folder';
   const isBrowser = item.type === 'browser';
+  const isTerminal = item.type === 'terminal';
 
   return (
     <div
@@ -176,7 +185,7 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
       }}
       onMouseMove={handleMouseMove}
     >
-      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : isBrowser ? 'overflow-hidden bg-gray-900 border border-gray-700' : 'overflow-hidden bg-white border border-gray-100'}`}>
+      <div className={`w-full h-full rounded-3xl ${isFolder ? 'overflow-visible' : (isBrowser || isTerminal) ? 'overflow-hidden bg-gray-900 border border-gray-700' : 'overflow-hidden bg-white border border-gray-100'}`}>
           {renderContent()}
       </div>
 
