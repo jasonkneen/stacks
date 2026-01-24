@@ -495,7 +495,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         if (e.shiftKey) {
             dragTiltRef.current = 0;
         } else {
-            const targetTilt = Math.max(Math.min(deltaX * 0.5, 15), -15);
+            // Scale max tilt inversely with item size - larger items rotate less
+            const draggedItem = items.find(i => i.id === draggingId);
+            const itemSize = draggedItem ? Math.max(draggedItem.w, draggedItem.h) : 1;
+            const maxTilt = Math.max(3, 15 / Math.sqrt(itemSize)); // 1x1=15°, 4x4=7.5°, 9x9=5°
+            const targetTilt = Math.max(Math.min(deltaX * 0.5, maxTilt), -maxTilt);
             const currentTilt = dragTiltRef.current;
 
             // Only approach target if moving in same direction or target is stronger

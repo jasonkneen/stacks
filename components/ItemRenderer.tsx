@@ -112,9 +112,11 @@ export const ItemRenderer: React.FC<ItemRendererProps> = memo(({
   // Calculate final transform
   // 1. Base rotation (random scatter)
   // 2. Drag tilt (physics)
-  // 3. Scale (pop on lift)
+  // 3. Scale (pop on lift) - scaled inversely with item size
   const rotation = item.rotation + (isDragging ? dragTilt : 0);
-  const scale = isDragging ? 1.05 : (isSelected ? 1.02 : 1);
+  const itemSize = Math.max(item.w, item.h);
+  const liftAmount = 0.05 / Math.sqrt(itemSize / 100); // 100px=5%, 400px=2.5%, 900px=1.7%
+  const scale = isDragging ? 1 + Math.max(0.01, liftAmount) : (isSelected ? 1.02 : 1);
 
   const style: React.CSSProperties = {
     transform: `translate3d(${item.x}px, ${item.y}px, 0) rotate(${rotation}deg) scale(${scale})`,
