@@ -1,0 +1,21 @@
+{
+  "id": "ws_54f5ebc6",
+  "name": "spatial",
+  "slug": "spatial",
+  "defaults": {
+    "model": "claude-opus-4-5-20251101",
+    "permissionMode": "safe",
+    "cyclablePermissionModes": [
+      "safe",
+      "ask",
+      "allow-all"
+    ],
+    "thinkingLevel": "max",
+    "enabledSourceSlugs": []
+  },
+  "localMcpServers": {
+    "enabled": true
+  },
+  "createdAt": 1770079403245,
+  "updatedAt": 1770079478470
+}

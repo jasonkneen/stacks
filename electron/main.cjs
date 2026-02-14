@@ -4,6 +4,7 @@ const path = require('path')
 const net = require('net')
 const fs = require('fs')
 const { startPtyServer, stopPtyServer } = require('./pty-server.cjs')
+const { startMCPProxy, stopMCPProxy } = require('./mcp-proxy.cjs')
 
 // Set app name for macOS menu
 app.name = 'Stacks'
@@ -164,6 +165,9 @@ function createWindow() {
   // Start PTY server for Ghostty terminal
   startPtyServer()
 
+  // Start MCP proxy server
+  startMCPProxy()
+
   if (isDev) {
     // Development: Load from Vite server
     mainWindow.loadURL(`http://localhost:${serverPort}`)
@@ -209,8 +213,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  // Stop PTY server
+  // Stop PTY server and MCP proxy
   stopPtyServer()
+  stopMCPProxy()
 
   // Kill vite process when app quits (dev mode only)
   if (viteProcess && !viteProcess.killed) {

@@ -35,7 +35,50 @@
     "mcp:proxy:start": "node dist/mcp/proxy.js",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
-    "version:major": "npm version major --no-git-tag-version"
+    "version:major": "npm version major --no-git-tag-version",
+    "package:mac": "bun run build:prod && electron-builder --mac --config"
+  },
+  "build": {
+    "appId": "com.jasonkneen.stacks",
+    "productName": "Stacks",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "!node_modules/.vite/**/*",
+      "!node_modules/tsx/**/*",
+      "!node_modules/@esbuild/**/*",
+      "!node_modules/esbuild/**/*",
+      "!node_modules/vite/**/*",
+      "!node_modules/@vitejs/**/*",
+      "!node_modules/typescript/**/*",
+      "!node_modules/tailwindcss/**/*",
+      "!node_modules/@tailwindcss/**/*",
+      "!node_modules/postcss/**/*",
+      "!node_modules/autoprefixer/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ]
+    },
+    "dmg": {
+      "sign": false
+    }
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.2",
@@ -67,6 +110,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.23",
     "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
