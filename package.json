@@ -1,6 +1,6 @@
 {
   "name": "stacks-ai",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "Stacks - AI-powered infinite canvas for notes, images, and creative organization",
   "author": "Jason Kneen",
   "license": "MIT",
@@ -72,7 +72,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ]
     },
